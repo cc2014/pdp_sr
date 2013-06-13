@@ -1,7 +1,7 @@
 // Demo_SR.cpp : Defines the entry point for the console application.
 //
 
-//#include "stdafx.h"
+#include "stdafx.h"
 #include "ScSR.h"
 
 void set_ParamScSR( ParamScSR &strParamScSR )
