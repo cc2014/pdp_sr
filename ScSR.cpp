@@ -1,4 +1,4 @@
-//#include "stdafx.h"
+#include "stdafx.h"
 #include "ScSR.h"
 
 /*
@@ -11,7 +11,7 @@ typedef struct _ParamScSR
 
 }ParamScSR;
 */
-
+void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh );
 void resize_image_bau( unsigned char *src_data, unsigned char *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h );
 bool convolve2DSeparable(double* in, double* out_horl, double *out_vert, int dataSizeX, int dataSizeY,    
                          double* kernelX, int kSizeX, double* kernelY, int kSizeY);
@@ -72,7 +72,10 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 	int i, nrowx2, ncolx2;
 	unsigned char *byte_mIm;
-	double *mIm, *lImfea;
+	double *mIm, *lImfea, *mPatch, *mPatchFea;
+	
+	mPatch = new double[nrow*ncol];
+	mPatchFea = new double[nrow*ncol];
 	
 	nrowx2 = (nrow<<1);
 	ncolx2 = (ncol<<1);
@@ -94,13 +97,188 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	// % extract low-resolution image features	
 	extr_lIm_fea( mIm, lImfea, nrowx2, ncolx2 );
 	
-	// .....
+	//% patch indexes for sparse recovery (avoid boundary)
+	//gridx = 3:patch_size - overlap : w-patch_size-2;
+	//gridx = [gridx, w-patch_size-2];
+	//gridy = 3:patch_size - overlap : h-patch_size-2;
+	//gridy = [gridy, h-patch_size-2];	
+	int *gridx = new int[ncolx2];
+	int *gridy = new int[nrowx2];
+	memset( gridx, 0, sizeof(int)*ncolx2 );
+	memset( gridy, 0, sizeof(int)*nrowx2 );
+	int step = strParamScSR.patch_size - strParamScSR.overlap;
+	//gridx[0]=3;
+	//gridy[0]=3;
+	int count_idx=0;
+	for( i=3; i<=(ncolx2-strParamScSR.patch_size-2); i+=step ){
+		gridx[count_idx] = i;	
+		count_idx++;
+	}
+	int gridx_len = count_idx;
+	gridx[count_idx] = ncolx2-strParamScSR.patch_size-2;
 	
+	count_idx=0;
+	for( i=3; i<=(nrowx2-strParamScSR.patch_size-2); i+=step ){
+		gridy[count_idx] = i;	
+		count_idx++;
+	}
+	gridy[count_idx] = nrowx2-strParamScSR.patch_size-2;
+	int gridy_len = count_idx;
+
+	int ii, jj, kk, cnt = 0;
+
+	for( ii=0; ii<gridx_len; ii++ )
+	{
+		for( jj=0; jj<gridy_len; jj++ )
+		{
+			   
+			//cnt = cnt+1;
+			int xx = gridx[ii];
+			int yy = gridy[jj];
+			//mPatch = mIm(yy:yy+patch_size-1, xx:xx+patch_size-1);
+			//mMean = mean(mPatch(:));
+			//mPatch = mPatch(:) - mMean;
+			//mNorm = sqrt(sum(mPatch.^2));
+			int pxp = strParamScSR.patch_size*strParamScSR.patch_size;
+
+			copy_gray_image_d( mIm, ncolx2, nrowx2, xx, yy, 
+				mPatch, strParamScSR.patch_size, strParamScSR.patch_size );
+			double mean_val=0, mNorm=0, mfNorm=0;
+			for( kk=0; kk<(strParamScSR.patch_size*strParamScSR.patch_size); kk++ ){
+				mean_val+=mPatch[kk];
+			}
+			mean_val/=(strParamScSR.patch_size*strParamScSR.patch_size);
+			for( kk=0; kk<(strParamScSR.patch_size*strParamScSR.patch_size); kk++ ){
+				mPatch[kk]-=mean_val;
+				mNorm+=(mPatch[kk]*mPatch[kk]);
+			}
+			mNorm = sqrt(mNorm);
+
+			//mPatchFea = lImfea(yy:yy+patch_size-1, xx:xx+patch_size-1, :);   
+			//mPatchFea = mPatchFea(:);
+			//mfNorm = sqrt(sum(mPatchFea.^2));
+			//if mfNorm > 1,
+			//	y = mPatchFea./mfNorm;
+			//else
+			//	y = mPatchFea;
+			//end
+
+			for( kk=0; kk<4; kk++ ){
+				copy_gray_image_d( lImfea+kk*(ncolx2*nrowx2), ncolx2, nrowx2, xx, yy, 
+					mPatchFea+kk*(strParamScSR.patch_size*strParamScSR.patch_size), strParamScSR.patch_size, strParamScSR.patch_size );
+			}
+			for( kk=0; kk<4*pxp; kk++ ){
+				mfNorm += (mPatchFea[kk]*mPatchFea[kk]);	
+			}
+			mfNorm = sqrt(mfNorm);
+			if(mfNorm>1){
+				for( kk=0; kk<4*pxp; kk++ ){
+					mPatchFea[kk] /= mfNorm;	
+				}
+				
+			}
+
+			//b = -Dl'*y;
+	  //    
+			//% sparse recovery
+			//w = L1QP_FeatureSign_yang(lambda, A, b);
+	  //      
+			//% generate the high resolution patch and scale the contrast
+			//hPatch = Dh*w;
+			//hPatch = lin_scale(hPatch, mNorm);
+	  //      
+			//hPatch = reshape(hPatch, [patch_size, patch_size]);
+			//hPatch = hPatch + mMean;
+	  //      
+			//hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) = hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) + hPatch;
+			//cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) = cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) + 1;
+
+
+
+			cnt++;
+		}
+	}
+
+	
+
+
+
+	delete[]gridx;
+	delete[]gridy;
 	delete[]byte_mIm;
 	delete[]lImfea;
 	delete[]mIm;
+	delete[]mPatch;
+	delete[]mPatchFea;
 	
 	return true;
+}
+
+
+void copy_gray_image( const unsigned char *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, unsigned char *pDst, int &dst_imgw, int &dst_imgh )
+{
+	int i, x, y, src_img_dim, end_x, end_y, count;
+	end_x = start_x + dst_imgw;
+	end_y = start_y + dst_imgh;
+
+	count = 0;
+
+	/*i = 0;
+	for( y=0; y<src_imgh; y++ ) {
+	for( x=0; x<src_imgw; x++ , i++) {
+	if( x>=start_x && x<end_x && y>=start_y && y<end_y ) {
+	pDst[count++] = pSrc[i];
+	}
+	}
+	}//*/
+	if( start_x<0 ){ start_x = 0; }
+	if( start_y<0 ){ start_y = 0; }
+	if( (start_x+dst_imgw)>src_imgw ){ dst_imgw = src_imgw - start_x; }
+	if( (start_y+dst_imgh)>src_imgh ){ dst_imgh = src_imgh - start_y; }
+
+	unsigned char *ptraa = (unsigned char*)pSrc + start_y*src_imgw + start_x;
+	unsigned char *ptrbb = pDst;
+	for( y=0; y<dst_imgh; y++ )
+	{
+		memcpy( ptrbb, ptraa, dst_imgw ); 
+		ptraa+=src_imgw;
+		ptrbb+=dst_imgw;
+	}
+
+
+}
+
+void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh )
+{
+	int i, x, y, src_img_dim, end_x, end_y, count;
+	end_x = start_x + dst_imgw;
+	end_y = start_y + dst_imgh;
+
+	count = 0;
+
+	/*i = 0;
+	for( y=0; y<src_imgh; y++ ) {
+	for( x=0; x<src_imgw; x++ , i++) {
+	if( x>=start_x && x<end_x && y>=start_y && y<end_y ) {
+	pDst[count++] = pSrc[i];
+	}
+	}
+	}//*/
+	if( start_x<0 ){ start_x = 0; }
+	if( start_y<0 ){ start_y = 0; }
+	if( (start_x+dst_imgw)>src_imgw ){ dst_imgw = src_imgw - start_x; }
+	if( (start_y+dst_imgh)>src_imgh ){ dst_imgh = src_imgh - start_y; }
+
+	double *ptraa = (double*)pSrc + start_y*src_imgw + start_x;
+	double *ptrbb = pDst;
+	for( y=0; y<dst_imgh; y++ )
+	{
+		memcpy( ptrbb, ptraa, sizeof(double)*dst_imgw ); 
+		ptraa+=src_imgw;
+		ptrbb+=dst_imgw;
+	}
+
+
 }
 
 static void resize_image_bau( unsigned char *src_data, unsigned char *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ) 
