@@ -4,6 +4,12 @@
 #include <cstring>
 #include <math.h>
 
+#if defined(_DEBUG)
+#define dprintf(fmt, ...) printf("%s():%d "fmt,__func__,__LINE__,##__VA_ARGS__)
+#else
+#define dprintf(fmt, ...)
+#endif
+
 typedef unsigned char uint8;
 
 using namespace std;
@@ -52,7 +58,7 @@ void createFilter(double* gKernel, int size, double sigma)
 
 bool convolve2DSeparable(double* in, double* out, int dataSizeX, int dataSizeY,    
                          float* kernelX, int kSizeX, float* kernelY, int kSizeY)   
-{   
+{
     int i, j, k, m, n;   
     float *tmp, *sum;                               // intermediate data buffer   
     double *inPtr, *outPtr;                  // working pointers   
@@ -65,11 +71,19 @@ bool convolve2DSeparable(double* in, double* out, int dataSizeX, int dataSizeY,
    
     // allocate temp storage to keep intermediate result   
     tmp = new float[dataSizeX * dataSizeY];   
-    if(!tmp) return false;  // memory allocation error   
+    if(!tmp)
+	{
+		delete [] tmp;
+		return false;  // memory allocation error   
+	}
    
     // store accumulated sum   
     sum = new float[dataSizeX];   
-    if(!sum) return false;  // memory allocation error   
+    if(!sum) 
+	{
+		delete[] sum;
+		return false;  // memory allocation error   
+	}
    
     // covolve horizontal direction ///////////////////////   
    
@@ -233,17 +247,15 @@ bool convolve2DSeparable(double* in, double* out, int dataSizeX, int dataSizeY,
     return true;   
 } 
 
-
-
-void resize_image_bau( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h )
+void resize_image_bau( double *src_data, double *dst_data, const int src_w, const int src_h, const int dst_w, const int dst_h )
 {
  
  
     double scalex, scaley;
-    double sr, sc, ratior, ratioc, value1, value2; 
-    int dr, dc, isr, isc;
+    double sr, sc, ratior, ratioc, value1, value2, b1, b2; 
+    int isr, isc;
     double *imgp;
-    int dd, t, stepr, stepc, ii, b1, b2;
+    int dd, t, stepr, stepc, ii;//, b1, b2;
  
     //unsigned char *data = (unsigned char*)malloc( dst_w*dst_h );
     //scalex = (double)dst_w/(double)src_w;
@@ -251,16 +263,16 @@ void resize_image_bau( double *src_data, double *dst_data, const int &src_w, con
     scalex = (double)src_w/(double)dst_w;
     scaley = (double)src_h/(double)dst_h;
      
-    b1 = (src_w-1)/scalex;
-    b2 = (src_h-1)/scaley;
-    for (dr=0; dr<b2; dr++)
+    b1 = (double)(src_w-1)/scalex;
+    b2 = (double)(src_h-1)/scaley;
+    for (int dr=0; dr<b2; dr++)
     {
         dd = dr*dst_w;
         sr = dr*scaley;
         isr = (int)sr;
-        ratior = sr-isr;
+        ratior = (double)sr-isr;
         ii = isr*src_w;
-        for (dc=0; dc<b1; dc++)
+        for (int dc=0; dc<b1; dc++)
         {         
             sc = dc*scalex;
             isc = (int)sc;
@@ -269,10 +281,10 @@ void resize_image_bau( double *src_data, double *dst_data, const int &src_w, con
             value1 = *imgp*(1-ratioc) + *(imgp+1)*ratioc;
             imgp += src_w;
             value2 = *imgp*(1-ratioc) + *(imgp+1)*ratioc;
-            dst_data[ dd + dc ] = (unsigned char)(value1*(1-ratior)+value2*ratior);
+            dst_data[ dd + dc ] = (double)(value1*(1-ratior)+value2*ratior);
         }
  
-        for (dc=b1; dc<dst_w; dc++)
+        for (int dc=b1; dc<dst_w; dc++)
         {                 
             sc = dc*scalex;
             isc = (int)sc;
@@ -281,17 +293,17 @@ void resize_image_bau( double *src_data, double *dst_data, const int &src_w, con
             value1 = *imgp;
             imgp += src_w;
             value2 = *imgp;
-            dst_data[ dd + dc ] = (unsigned char)(value1*(1-ratior)+value2*ratior);
+            dst_data[ dd + dc ] = (double)(value1*(1-ratior)+value2*ratior);
         }
     }
  
-    for (dr=b2; dr<dst_h; dr++)
+    for (int dr=b2; dr<dst_h; dr++)
     {
         dd = dr*dst_w;
         sr = dr*scaley;
         isr = (int)sr;
         ratior = sr-isr;
-        for (dc=0; dc<b1; dc++)
+        for (int dc=0; dc<b1; dc++)
         {         
             sc = dc*scalex;
             isc = (int)sc;
@@ -299,10 +311,10 @@ void resize_image_bau( double *src_data, double *dst_data, const int &src_w, con
             imgp = src_data + isr*src_w+isc;
             value1 = *imgp*(1-ratioc) + *(imgp+1)*ratioc;
             value2=value1;
-            dst_data[ dd + dc ] = (unsigned char)(value1*(1-ratior)+value2*ratior);
+            dst_data[ dd + dc ] = (double)(value1*(1-ratior)+value2*ratior);
         }
  
-        for (dc=b1; dc<dst_w; dc++)
+        for (int dc=b1; dc<dst_w; dc++)
         {         
             sc = dc*scalex;
             isc = (int)sc;
@@ -310,10 +322,11 @@ void resize_image_bau( double *src_data, double *dst_data, const int &src_w, con
             imgp = src_data + isr*src_w+isc;
             value1 = *imgp;
             value2 = value1;
-            dst_data[ dd + dc ] = (unsigned char)(value1*(1-ratior)+value2*ratior);
+            dst_data[ dd + dc ] = (double)(value1*(1-ratior)+value2*ratior);
         }
  
     }
+
 }
 
 /* back projection function of matlab code
@@ -341,7 +354,7 @@ end
 */   
 
 
-void backprojection (uint8* im_h, int width_h, int height_h, uint8* im_l, int width_l, int height_l, int maxIter)
+void backprojection (uint8* im_h, int width_h, int height_h, uint8* im_l, int width_l, int height_l, int maxIter, double* im_ret)
 {
 	/* create gaussian filter. 
 	 * ====================================================== *
@@ -367,25 +380,48 @@ void backprojection (uint8* im_h, int width_h, int height_h, uint8* im_l, int wi
 	* ====================================================== *
 	*/
 
-	double* im_l_s = (double*)malloc(width_l*height_l);
-	double* im_diff = (double*)malloc(width_l*height_l);
-	double* im_diff_h = (double*)malloc(width_h*height_h);
-	double* im_diff_conv = (double*)malloc(width_h*height_h);
+	double* im_l_s = (double*)malloc(width_l*height_l*sizeof(double));
+	double* im_diff = (double*)malloc(width_l*height_l*sizeof(double));
+	double* im_diff_h = (double*)malloc(width_h*height_h*sizeof(double));
+	double* im_diff_conv = (double*)malloc(width_h*height_h*sizeof(double));
 
     float kernelX[5] = { 1/16.0f,  4/16.0f,  6/16.0f,  4/16.0f, 1/16.0f };   
     float kernelY[5] = { 1/16.0f,  4/16.0f,  6/16.0f,  4/16.0f, 1/16.0f };   
+
+	double* im_l_d = (double*)malloc(width_l*height_l*sizeof(double));
+
+	/* convert uint8 to double */
+	for(int i=0; i<width_h*height_h; i++)
+	{
+		im_ret[i]=(double)im_h[i];
+	}
+
+	for(int i=0; i<width_l*height_l; i++)
+	{
+		im_l_d[i]=(double)im_l[i];
+	}
 
 	/*
 	 * first downscale im_h to im_l_s, then calculate diff between im_l and im_l_s, 
 	 * upscale the difference to high-res and convolve with gaussian. merge back to im_h.
 	 */
-	for(int i=0; i<maxIter; i++)
+	for(int i=1; i<=maxIter; i++)
 	{
-		resize_image_bau((double *)im_h, im_l_s, width_h, height_h, width_l, height_l);
-		
+		resize_image_bau(im_ret, im_l_s, width_h, height_h, width_l, height_l);
+
 		for(int i = 0; i<width_l; i++)
 			for(int j = 0; j<height_l; j++)
-				im_diff[i*width_l+j]=im_l[i*width_l+j] - im_l_s[i*width_l+j];
+				im_diff[i*width_l+j]=(double)im_l_d[i*width_l+j] - im_l_s[i*width_l+j];
+
+		/*
+	for(int i=0; i<256; i++)
+	{
+		for(int j=0; j<1; j++)
+		{
+			printf("%f ", im_diff[i*256+j]);
+		}
+	}
+	*/
 
 		resize_image_bau(im_diff, im_diff_h, width_l, height_l, width_h, height_h);
 
@@ -393,9 +429,11 @@ void backprojection (uint8* im_h, int width_h, int height_h, uint8* im_l, int wi
 
 		for(int i = 0; i<width_h; i++)
 			for(int j = 0; j<height_h; j++)
-				im_h[i*width_h+j]=im_h[i*width_h+j] + im_diff_conv[i*width_h+j];
+				im_ret[i*width_h+j]=im_ret[i*width_h+j] + im_diff_conv[i*width_h+j];
 	}
 
+	//free(im_h_d);
+	free(im_l_d);
 	free(im_l_s);
 	free(im_diff);
 	free(im_diff_h);
@@ -416,17 +454,39 @@ void backprojection (uint8* im_h, int width_h, int height_h, uint8* im_l, int wi
 int main(int argc, char* argv[])
 {
 	FILE *im_h_fp = NULL;
-	FILE *im_hr_fp = NULL;
 	FILE *im_l_fp = NULL;
 
-	im_h_fp = fopen("./im_h.dat", "r");
-	im_l_fp = fopen("./im_l.dat", "r");
-	im_hr_fp = fopen("./im_h_result.dat", "r");
+	im_h_fp = fopen("./im_h.dat", "rb");
+	im_l_fp = fopen("./im_l.dat", "rb");
 
 	int size_h=256, size_l=128;
-	double* im_h = malloc(size_h*size_h);
-	double* im_l = malloc(size_l*size_l);
+	double* im_final = (double*)malloc(size_h*size_h*sizeof(double));
+	uint8* im_h = (uint8*)malloc(size_h*size_h*sizeof(uint8));
+	uint8* im_l = (uint8*)malloc(size_l*size_l*sizeof(uint8));
+	fread(im_h, sizeof(uint8),  256*256, im_h_fp );
+	fread(im_l, 1,  128*128, im_l_fp );
 
+	backprojection(im_h, 256, 256, im_l, 128, 128, 20, im_final);
+
+	FILE* im_out=NULL;
+	im_out = fopen("./im_out.dat", "wb");
+	fwrite(im_final, 1, 256*256, im_out);
+
+	/*
+	for(int i=0; i<256; i++)
+	{
+		for(int j=0; j<256; j++)
+		{
+			printf("%f ", im_final[i*256+j]);
+		}
+		printf("\n");
+	}
+	*/
+
+
+	free(im_final);
+	free(im_h);
+	free(im_l);
 	return 0;
 
 
