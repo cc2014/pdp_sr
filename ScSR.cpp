@@ -13,10 +13,11 @@ typedef struct _ParamScSR
 */
 void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh );
 void resize_image_bau( unsigned char *src_data, unsigned char *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h );
+void resize_image_d( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ); 
 bool convolve2DSeparable(double* in, double* out_horl, double *out_vert, int dataSizeX, int dataSizeY,    
                          double* kernelX, int kSizeX, double* kernelY, int kSizeY);
-
-						 
+double sum_of_product( double *vector_a, double *vector_b, int vector_length );
+void set_patch_image( double *pSrc, int *labelMtx, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh );						 
 //% first order gradient filters
 double hf1[] = {-1,0,1};
 double vf1[] = {-1,0,1};
@@ -70,13 +71,28 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	// % extract low-resolution image features
 	// lImfea = extr_lIm_fea(mIm);
 
-	int i, nrowx2, ncolx2;
+	int i, j, ii, nrowx2, ncolx2;
 	unsigned char *byte_mIm;
 	double *mIm, *lImfea, *mPatch, *mPatchFea;
-	
+	double *b, *DlT, *L1QP_w, *hPatch, *hIm;
+	int *cntMat;
+
 	mPatch = new double[nrow*ncol];
 	mPatchFea = new double[nrow*ncol];
-	
+	b = new double[strParamScSR.Dlw];
+	DlT = new double[strParamScSR.Dlw*strParamScSR.Dlh];
+	L1QP_w = new double[strParamScSR.Dhh*strParamScSR.Dhw];
+	hPatch = new double[strParamScSR.Dhh];
+    
+	// transpose
+	for( i=0; i<strParamScSR.Dlh; i++ )
+	{
+		ii=i*strParamScSR.Dlw;
+		for( j=0; j<strParamScSR.Dlw; j++ ){
+			DlT[j*strParamScSR.Dlh+i] = strParamScSR.Dl[ii+j];
+		}
+	}
+
 	nrowx2 = (nrow<<1);
 	ncolx2 = (ncol<<1);
 	byte_mIm = new unsigned char[nrowx2*ncolx2];
@@ -89,6 +105,10 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	
 	write_pgm_y( "im_l_y_scale2.pgm", nrowx2, ncolx2, byte_mIm );
 
+	hIm = new double[nrowx2*ncolx2];
+	cntMat = new int[nrowx2*ncolx2];
+	memset( hIm, 0, sizeof(double)*nrowx2*ncolx2 );
+	memset( cntMat, 0, sizeof(int)*nrowx2*ncolx2 );
 	for( i=0; i<(nrowx2*ncolx2); i++ )
 	{
 		mIm[i] = (double)byte_mIm[i];
@@ -114,7 +134,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 		gridx[count_idx] = i;	
 		count_idx++;
 	}
-	int gridx_len = count_idx;
+	int gridx_len = count_idx+1;
 	gridx[count_idx] = ncolx2-strParamScSR.patch_size-2;
 	
 	count_idx=0;
@@ -123,9 +143,9 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 		count_idx++;
 	}
 	gridy[count_idx] = nrowx2-strParamScSR.patch_size-2;
-	int gridy_len = count_idx;
+	int gridy_len = count_idx+1;
 
-	int ii, jj, kk, cnt = 0;
+	int jj, kk, cnt = 0;
 
 	for( ii=0; ii<gridx_len; ii++ )
 	{
@@ -133,8 +153,8 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 		{
 			   
 			//cnt = cnt+1;
-			int xx = gridx[ii];
-			int yy = gridy[jj];
+			int xx = gridx[ii]-1;
+			int yy = gridy[jj]-1;
 			//mPatch = mIm(yy:yy+patch_size-1, xx:xx+patch_size-1);
 			//mMean = mean(mPatch(:));
 			//mPatch = mPatch(:) - mMean;
@@ -143,12 +163,13 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 			copy_gray_image_d( mIm, ncolx2, nrowx2, xx, yy, 
 				mPatch, strParamScSR.patch_size, strParamScSR.patch_size );
+
 			double mean_val=0, mNorm=0, mfNorm=0;
-			for( kk=0; kk<(strParamScSR.patch_size*strParamScSR.patch_size); kk++ ){
+			for( kk=0; kk<pxp; kk++ ){
 				mean_val+=mPatch[kk];
 			}
-			mean_val/=(strParamScSR.patch_size*strParamScSR.patch_size);
-			for( kk=0; kk<(strParamScSR.patch_size*strParamScSR.patch_size); kk++ ){
+			mean_val/=pxp;
+			for( kk=0; kk<pxp; kk++ ){
 				mPatch[kk]-=mean_val;
 				mNorm+=(mPatch[kk]*mPatch[kk]);
 			}
@@ -165,7 +186,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 			for( kk=0; kk<4; kk++ ){
 				copy_gray_image_d( lImfea+kk*(ncolx2*nrowx2), ncolx2, nrowx2, xx, yy, 
-					mPatchFea+kk*(strParamScSR.patch_size*strParamScSR.patch_size), strParamScSR.patch_size, strParamScSR.patch_size );
+					mPatchFea+kk*pxp, strParamScSR.patch_size, strParamScSR.patch_size );
 			}
 			for( kk=0; kk<4*pxp; kk++ ){
 				mfNorm += (mPatchFea[kk]*mPatchFea[kk]);	
@@ -193,14 +214,55 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			//hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) = hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) + hPatch;
 			//cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) = cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) + 1;
 
+			for( i=0; i<strParamScSR.Dlw; i++ ){
+				b[i] = -sum_of_product( DlT+i*strParamScSR.Dlh, mPatchFea, strParamScSR.Dlh ); 
+			}
+
+			//% sparse recovery
+			//w = L1QP_FeatureSign_yang(lambda, A, b);
+
+//			L1QP_FeatureSign_yang(strParamScSR.lambda, strParamScSR.DlTxDl, b, L1QP_w );
+
+			for( i=0; i<strParamScSR.Dhh; i++ ){
+				hPatch[i] = sum_of_product( strParamScSR.Dh+i*strParamScSR.Dhw, L1QP_w, strParamScSR.Dhw );  
+			}
+
+			// lin_scale
+			double hNorm=0,s;
+			for( i=0; i<strParamScSR.Dhh; i++ ){
+				hNorm+=(hPatch[i]*hPatch[i]);
+			}
+			hNorm = sqrt(hNorm);
+
+			if(hNorm!=0){
+				s=mfNorm*1.2/hNorm;
+				for( i=0; i<strParamScSR.Dhh; i++ ){
+					hPatch[i] *= s;
+				}
+			}
+			for( i=0; i<strParamScSR.Dhh; i++ ){
+				hPatch[i] += mean_val;
+			}
+
+
+			set_patch_image( hIm, cntMat, ncolx2, nrowx2, xx, yy, 
+				hPatch, strParamScSR.patch_size, strParamScSR.patch_size );
 
 
 			cnt++;
 		}
 	}
 
-	
+	for( i=0; i<(ncolx2*nrowx2); i++ )
+	{
+		if(cntMat[i]<1){
+			hIm[i] = mIm[i];
+			cntMat[i] = 1;
+		}
+		hIm[i]/=cntMat[i];
+	}
 
+	// cast to int8
 
 
 	delete[]gridx;
@@ -210,11 +272,73 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	delete[]mIm;
 	delete[]mPatch;
 	delete[]mPatchFea;
-	
+	delete[]DlT;
+	delete[]b;
+	delete[]L1QP_w;
+	delete[]hPatch;
+	delete[]hIm;
+	delete[]cntMat;
+
+
 	return true;
 }
 
+double sum_of_product( double *vector_a, double *vector_b, int vector_length )
+{
+	double sum=0;
+	int i;
+	double *ptraa=vector_a;
+	double *ptrbb=vector_b;
 
+	for( i=0; i<vector_length; i++ )
+	{
+		sum += (*ptraa * *ptrbb);
+		ptraa++;
+		ptrbb++;
+	}
+
+	return sum;
+}
+
+void set_patch_image( double *pSrc, int *labelMtx, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh )
+{
+	int i, x, y, src_img_dim, end_x, end_y, count;
+	end_x = start_x + dst_imgw;
+	end_y = start_y + dst_imgh;
+
+	count = 0;
+
+	/*i = 0;
+	for( y=0; y<src_imgh; y++ ) {
+	for( x=0; x<src_imgw; x++ , i++) {
+	if( x>=start_x && x<end_x && y>=start_y && y<end_y ) {
+	pDst[count++] = pSrc[i];
+	}
+	}
+	}//*/
+	if( start_x<0 ){ start_x = 0; }
+	if( start_y<0 ){ start_y = 0; }
+	if( (start_x+dst_imgw)>src_imgw ){ dst_imgw = src_imgw - start_x; }
+	if( (start_y+dst_imgh)>src_imgh ){ dst_imgh = src_imgh - start_y; }
+
+	double *ptraa = (double*)pSrc + start_y*src_imgw + start_x;
+	double *ptrbb = pDst;
+	int *ptrcc = labelMtx + start_y*src_imgw + start_x;
+	for( y=0; y<dst_imgh; y++ )
+	{
+		 
+		for( x=0; x<dst_imgw; x++ ){
+			ptraa[x]+=ptrbb[x];
+			ptrcc[x] += 1; 
+		}
+		ptraa+=src_imgw;
+		ptrbb+=dst_imgw;
+
+		ptrcc += src_imgw;
+	}
+
+
+}
 void copy_gray_image( const unsigned char *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, unsigned char *pDst, int &dst_imgw, int &dst_imgh )
 {
 	int i, x, y, src_img_dim, end_x, end_y, count;
@@ -362,7 +486,87 @@ static void resize_image_bau( unsigned char *src_data, unsigned char *dst_data, 
     } 
 }
 
-
+void resize_image_d( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ) 
+{ 
+ 
+ 
+    double scalex, scaley; 
+    double sr, sc, ratior, ratioc, value1, value2;  
+    int dr, dc, isr, isc; 
+    double *imgp; 
+    int dd, t, stepr, stepc, ii;
+	int b1, b2; 
+ 
+    //unsigned char *data = (unsigned char*)malloc( dst_w*dst_h ); 
+    //scalex = (double)dst_w/(double)src_w; 
+    //scaley = (double)dst_h/(double)src_h; 
+    scalex = (double)src_w/(double)dst_w; 
+    scaley = (double)src_h/(double)dst_h; 
+     
+    b1 = (src_w-1)/scalex; 
+    b2 = (src_h-1)/scaley; 
+    for (dr=0; dr<b2; dr++) 
+    { 
+        dd = dr*dst_w; 
+        sr = dr*scaley; 
+        isr = (int)sr; 
+        ratior = sr-isr; 
+        ii = isr*src_w; 
+        for (dc=0; dc<b1; dc++) 
+        {         
+            sc = dc*scalex; 
+            isc = (int)sc; 
+            ratioc = sc-isc; 
+            imgp = src_data + ii+isc; 
+            value1 = *imgp*(1.0-ratioc) + *(imgp+1)*ratioc; 
+            imgp += src_w; 
+            value2 = *imgp*(1.0-ratioc) + *(imgp+1)*ratioc; 
+            dst_data[ dd + dc ] = (value1*(1.0-ratior)+value2*ratior); 
+        } 
+ 
+        for (dc=b1; dc<dst_w; dc++) 
+        {                 
+            sc = dc*scalex; 
+            isc = (int)sc; 
+            ratioc = sc-isc; 
+            imgp = src_data + isr*src_w+isc; 
+            value1 = *imgp; 
+            imgp += src_w; 
+            value2 = *imgp; 
+            dst_data[ dd + dc ] = (value1*(1-ratior)+value2*ratior); 
+        } 
+    } 
+ 
+    for (dr=b2; dr<dst_h; dr++) 
+    { 
+        dd = dr*dst_w; 
+        sr = dr*scaley; 
+        isr = (int)sr; 
+        ratior = sr-isr; 
+        for (dc=0; dc<b1; dc++) 
+        {         
+            sc = dc*scalex; 
+            isc = (int)sc; 
+            ratioc = sc-isc; 
+            imgp = src_data + isr*src_w+isc; 
+            value1 = *imgp*(1-ratioc) + *(imgp+1)*ratioc; 
+            value2=value1; 
+            dst_data[ dd + dc ] = (value1*(1-ratior)+value2*ratior); 
+        } 
+ 
+        for (dc=b1; dc<dst_w; dc++) 
+        {         
+            sc = dc*scalex; 
+            isc = (int)sc; 
+            ratioc = sc-isc; 
+            imgp = src_data + isr*src_w+isc; 
+            value1 = *imgp; 
+            value2 = value1; 
+            dst_data[ dd + dc ] = (value1*(1-ratior)+value2*ratior); 
+        } 
+ 
+    } 
+}
 ///////////////////////////////////////////////////////////////////////////////   
 // double precision float version   
 ///////////////////////////////////////////////////////////////////////////////   
