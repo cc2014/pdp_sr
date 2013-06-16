@@ -4,8 +4,10 @@
 #include <cstring>
 #include <cmath>
 #include <vector>
+#include <armadillo>
 
 using namespace std;
+using namespace arma;
 
 /* 
  * matlab code for solving L1QP 
@@ -166,26 +168,47 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 				Xa[k]=x_ret[a[k]];
 			}
 
-			double vect=0;
+			double *vect=new double[v_size];
 
-			// sign(x) in matlab: return 1 if x>1, 0  if x=0, -1 if x<0.
-			if(xa>0)
-				vect = -lambda-ba;
-			else if(xa==0)
-				vect = -ba;
-			else
-				vect = lambda-ba;
+			for(int i=0; i<v_size; i++)
+			{
+				if(Xa[i]>0)
+					vect[i] = -lambda-Ba[i];
+				else if(Xa[i]==0)
+					vect[i] = -Ba[i];
+				else
+					vect[i] = lambda-Ba[i];
+			}
 
 			double * x_new = new double[d_size];
-			for(int i=0; i<d_size; i++)
-			{
-				x_new[i]=Aa[i]/vect;
-			}
-			//double idx = 	
+
+
+			// convert Aa to armadillo Mat to solve x_new=Aa\vect;
+			mat Aa_m(v_size, v_size);
+			for(int i=0; i<v_size; i++)
+				for(int j=0; j<v_size; j++)
+					Aa_m(i, j)	= Aa[i*v_size+j];
+
+			// convert vect to armadillo vec to solve x_new=Aa\vect;
+			vec vect_m(v_size);
+			for(int i=0; i<v_size; i++)
+				vect_m(i)=vect[i];
+
+			// solve x_new = Aa\vect by armadillo with x_new_m = solve()
+			vec x_new_m = solve(Aa_m, vect_m);
+			for(int i=0; i<v_size; i++)
+				x_new[i]=x_new_m(i);
+
+			vector<int> idx;
+			for(int i=0; i<v_size; i++)
+				if(x_new[i]!=0)
+					idx.push_back(i);
 		
+
 
 			delete [] Aa;
 			delete [] Ba;
+			delete [] vect;
 			delete [] x_new;
 		}
 
