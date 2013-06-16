@@ -134,7 +134,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 		while(true)
 		{
 
-			vector<double> a; 
+			vector<int> a; 
 
 			/*
 			 * x_ret is an array of size $d_size
@@ -154,26 +154,19 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			int v_size=a.size(); // vector size
 
 			double *Aa = new double[v_size*v_size];
+			double *Ba = new double[v_size];
+			double *Xa = new double[v_size];
 			for(int i=0; i<v_size; i++)
-			{
 				for(int j=0; j<v_size; j++)
-				{
-					double idx = a.front();
-					Aa[i*v_size()+j]=A[idx][idx];
-				}
+					Aa[i*v_size+j]=A[a[i]*d_size+a[j]];
+
+			for(int k=0; k<v_size; k++)
+			{
+				Ba[k]=b[a[k]];
+				Xa[k]=x_ret[a[k]];
 			}
 
-			double ba, xa;
 			double vect=0;
-
-			/* **** NEED FIX THIS LATER *****
-			 *
-			 *     a=x~=0;   %active set
-			 *     Aa=A(a,a);
-			 *     ba=b(a);
-			 *     xa=x(a);
-			 *
-			 */
 
 			// sign(x) in matlab: return 1 if x>1, 0  if x=0, -1 if x<0.
 			if(xa>0)
@@ -183,11 +176,17 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			else
 				vect = lambda-ba;
 
-			double x_new = Aa/vect;
+			double * x_new = new double[d_size];
+			for(int i=0; i<d_size; i++)
+			{
+				x_new[i]=Aa[i]/vect;
+			}
 			//double idx = 	
 		
 
 			delete [] Aa;
+			delete [] Ba;
+			delete [] x_new;
 		}
 
 	}
