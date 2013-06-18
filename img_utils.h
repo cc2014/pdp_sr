@@ -17,4 +17,8 @@ void resize_image_d( double *src_data, double *dst_data,
 bool convolve2DSeparable(double* in, double* out_horl, 
 		double *out_vert, int dataSizeX, int dataSizeY, 
 		double* kernelX, int kSizeX, double* kernelY, int kSizeY);
+
+bool convolve2DSeparableBP(double* in, double* out, int dataSizeX, int dataSizeY,    
+                         double* kernelX, int kSizeX, double* kernelY, int kSizeY)   ;
+
 #endif //_IMG_UTILS_H

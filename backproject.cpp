@@ -55,10 +55,8 @@ void createFilter(double* gKernel, int size, double sigma)
  
 }
  * ====================================================== *
-*/
 
-/*
-bool convolve2DSeparable(double* in, double* out, int dataSizeX, int dataSizeY,    
+bool convolve2DSeparableBP(double* in, double* out, int dataSizeX, int dataSizeY,    
                          double* kernelX, int kSizeX, double* kernelY, int kSizeY)   
 {
     int i, j, k, m, n;   
@@ -250,6 +248,7 @@ bool convolve2DSeparable(double* in, double* out, int dataSizeX, int dataSizeY,
 } 
 
 
+/*
 void resize_image_d( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ) 
 { 
  
@@ -519,7 +518,7 @@ void backprojection (uint8* im_h, const int &width_h, const int &height_h,
 
 		resize_image_d(im_diff, im_diff_h, width_l, height_l, width_h, height_h);
 
-		//convolve2DSeparable(im_diff_h, im_diff_conv, width_h, height_h,  kernelX, 5, kernelY, 5);
+		convolve2DSeparableBP(im_diff_h, im_diff_conv, width_h, height_h,  kernelX, 5, kernelY, 5);
 
 		for(int i = 0; i<width_h; i++)
 			for(int j = 0; j<height_h; j++)
