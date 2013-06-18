@@ -1,8 +1,9 @@
 // Demo_SR.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
+//#include "stdafx.h"
 #include "ScSR.h"
+#include "alloc_util.h"
 
 void set_ParamScSR( ParamScSR &strParamScSR )
 {
@@ -52,14 +53,18 @@ void ReadDictionary()
 
 	fread( g_ParamScSR.Dl, g_ParamScSR.Dlw*g_ParamScSR.Dlh, sizeof(double), fid );
 	
-	g_ParamScSR.DlTxDl = new double[g_ParamScSR.Dlw*g_ParamScSR.Dlw];
+    fread( &g_ParamScSR.DlTxDl_h, 1, sizeof(int), fid );    
+	fread( &g_ParamScSR.DlTxDl_w, 1, sizeof(int), fid );    	
+
+	g_ParamScSR.DlTxDl = new double[g_ParamScSR.DlTxDl_h*g_ParamScSR.DlTxDl_w];
 	if(!g_ParamScSR.DlTxDl){
 		printf( "Error: No memory!!\n");
 	}
-    fread( g_ParamScSR.DlTxDl, g_ParamScSR.Dlw*g_ParamScSR.Dlw, sizeof(double), fid );
+    fread( g_ParamScSR.DlTxDl, g_ParamScSR.DlTxDl_h*g_ParamScSR.DlTxDl_w, sizeof(double), fid );
     fclose(fid);
     //%% --------------------
 }
+
 void Demo_SR()
 {
 	int nrow, ncol;
@@ -78,6 +83,69 @@ void Demo_SR()
 	}
 	fread( im_l_y, (nrow*ncol), sizeof(unsigned char), fid );
     fclose(fid);
+
+
+#if 0 // sample for finding invert matrix
+
+	double det_man; /* determinant mantisa */
+	int    det_exp; /* determinant exponent */
+	int Aa_w, Aa_h;
+	double *Aa;
+
+
+    fid = fopen( "Aa_7x7.dat", "rb" );    
+    fread( &Aa_w, 1, sizeof(int), fid );
+	fread( &Aa_h, 1, sizeof(int), fid );    	
+	Aa = new double[nrow*ncol];
+	if(!Aa){
+		printf("Error: No memory!\n");
+	}
+	fread( Aa, (Aa_w*Aa_h), sizeof(double), fid );
+    fclose(fid);
+
+
+	double **a=G_alloc_matrix(Aa_w,Aa_w);
+	int    *indx = G_alloc_ivector(Aa_w);
+	double **y = G_alloc_matrix(Aa_w,Aa_w);
+	double *col = G_alloc_vector(Aa_w);
+
+	for( int i=0; i<Aa_w; i++ ){
+		for( int j=0; j<Aa_w; j++ ){
+			a[i][j] = Aa[i*Aa_w+j];
+		}
+	}
+
+
+	clust_invert(
+	  a,      /* input/output matrix */
+	  Aa_w,        /* dimension */
+	  &det_man, /* determinant mantisa */
+	  &det_exp, /* determinant exponent */
+	  /* scratch space */
+	  indx,    /* indx = G_alloc_ivector(n);  */
+	  y,      /* y = G_alloc_matrix(n,n); */
+	  col      /* col = G_alloc_vector(n); */
+	);
+
+	FILE *fpMtx = fopen( "inv_matrix.txt", "w" );
+	for( int i=0; i<Aa_w; i++ ){
+		for( int j=0; j<Aa_w; j++ ){
+			fprintf( fpMtx, "%lf ", a[i][j] );
+		}
+		fprintf( fpMtx, "\n" );
+	}
+	fclose(fpMtx);
+
+	G_free_ivector(indx);
+	G_free_vector(col);
+	G_free_matrix(a);
+	G_free_matrix(y);
+	delete[]Aa;
+
+#endif
+
+
+
 #if 0
 	unsigned char *im_h_y = new unsigned char[nrow*ncol*4];
 	fid = fopen( "im_h_y_256x256.dat", "rb" );
@@ -108,7 +176,8 @@ void Demo_SR()
 	free_ParamScSR(g_ParamScSR);
 }
 
-int _tmain(int argc, _TCHAR* argv[])
+//int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, char* argv[])
 {
 
 	Demo_SR();
