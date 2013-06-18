@@ -9,6 +9,8 @@
 #include "ScSR.h"
 #include "alloc_util.h"
 
+#define dprintf(fmt, ...) 
+
 using namespace std;
 //using namespace arma;
 
@@ -93,6 +95,7 @@ end
 // x_ret: 1024x1 double array, representing resolved coefficients.
 void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x_ret, int &d_size)
 {
+	int tmp;
 	//int d_size=1024;
 	double EPS=1e-9;
 	double* grad=new double[d_size];
@@ -113,6 +116,14 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 		grad[i] += b[i];
 	}
+
+	/*
+	for(i=0;i<d_size; i++)
+	{
+		printf("gradient[%d]=%f\n",i,  grad[i]);
+	}
+	*/
+
 	//% [ma mi]=max(abs(grad).*(x==0));
 	for( i=0; i<d_size; i++){
 		if(x_ret[i]==0)
@@ -242,16 +253,21 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			  col      /* col = G_alloc_vector(n); */
 			);
 
+			double *invAa_raw = new double[a_size*a_size];
+
 
 			for( i=0; i<a_size; i++ ){
 				for( j=0; j<a_size; j++ ){
-					Aa[i*a_size+j] = invAa[i][j];
+					invAa_raw[i*a_size+j] = invAa[i][j];
 				}
 			}
 			// inv(Aa)*vect
 			for( i=0; i<a_size; i++){
-				x_new[i] = sum_of_product( Aa+i*a_size, vect, a_size );
+				x_new[i] = sum_of_product( invAa_raw+i*a_size, vect, a_size );
+			//	dprintf("checkpoint x_new[%d]=%f\n", i, x_new[i]);
 			}
+			//cin>>tmp;
+			delete [] invAa_raw;
 
 			//%idx = find(x_new);
 			//%o_new=(vect(idx)/2 + ba(idx))'*x_new(idx) + lambda*sum(abs(x_new(idx)));
@@ -264,7 +280,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 					sum_value+=fabs(x_new[i]);
 				}
 			}
-						
+
 			double o_new=0;
 			if(idx_count>0)
 			{
@@ -291,7 +307,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 					s[s_size++]=i;	
 				}
 			}
-
 
 			if(s_size==0)
 			{
@@ -337,24 +352,35 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 				x_min[i] = x_new[i];
 				//o_min[i] = o_new[i];
 				temp[i] = (x_new[i] - Xa[i])/Xa[i];
+				dprintf("x_min[%d]=%f temp[%d]=%f\n", i, x_min[i], i, temp[i]);
 			}
 			o_min = o_new;
 
+			dprintf("o_min=%f\n", o_min);
+				//cin>>tmp;
 
-			for( int zd=0; zd<s_size; zd++ ){
+
+			for( int zd=0; zd<s_size; zd++ )
+			{
+
+				dprintf("s[%d]=%d\n", zd, s[zd]);
 				
 				for( k=0; k<a_size; k++ ){
 					x_s[k] = Xa[k] - (x_new[k] - Xa[k])/temp[ s[zd] ]; 
+					dprintf("x_s[%d]=%f\n", k, x_s[k]);
 					
 				}
+				//cin>>tmp;
 				x_s[s[zd]] = 0; // %make sure it's zero
 				//
 				idx_count=0;
 				for( k=0; k<a_size; k++ ){
 					if(x_s[k]!=0){
+						dprintf("idx[%d]=%d\n", idx_count, k);
 						idx[idx_count++] = k;
 					}
 				}
+				dprintf("idxcount=%d\n", idx_count);
 
 				//
 				//%o_s = (Aa(idx, idx)*x_s(idx)/2 + ba(idx))'*x_s(idx)+lambda*sum(abs(x_s(idx)));
@@ -364,22 +390,32 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 					double *Aa_idx=new double[idx_count*idx_count];
 					double *ttvec=new double[idx_count];
 					double *ttvec2=new double[idx_count];
-					for( int m=0; m<idx_count; m++ ){
-						for( int n=0; n<idx_count; n++ ){
+
+					for( int m=0; m<idx_count; m++ )
+					{
+						for( int n=0; n<idx_count; n++ )
+						{
 							Aa_idx[m*idx_count+n] = Aa[ idx[m]*a_size+idx[n] ];
+							dprintf("Aa_idx[%d]=%f\n", m*idx_count+n, Aa_idx[m*idx_count+n]);
 						}
 						ttvec2[m] = x_s[ idx[m] ];
+						dprintf("ttvec2[%d]=%f\n", m, ttvec2[m]);
 					}
+					//cin>>tmp;
 
 					
 					for( int m=0; m<idx_count; m++ ){
 						ttvec[m] = sum_of_product( Aa_idx+m*idx_count, ttvec2, idx_count );  
+						ttvec[m] /= 2;
 						ttvec[m] += Ba[idx[m]];
+						dprintf("Ba[%d]=%f\n", idx[m], Ba[idx[m]]);
+						dprintf("ttvec[m]=%f\n", ttvec[m]);
 
 						o_s += ( ttvec[m]*x_s[ idx[m] ] + lambda*fabs( x_s[ idx[m] ] ) );
 					}
 					
-
+				dprintf("o_s=%f\n", o_s);
+				//cin>>tmp;
 
 
 					if(o_s<o_min){
@@ -409,6 +445,8 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 			loss=o_min;
 
+			dprintf("loss=%f\n", loss);
+			//cin>>tmp;
 
 			G_free_ivector(indx);
 			G_free_vector(col);
@@ -467,8 +505,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 
 	}
 
-//	dprintf("checkpoint exiting!\n");
-	
 	delete[]grad;
 
 }

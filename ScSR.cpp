@@ -129,7 +129,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	fread(lImfea, sizeof(double), 256*256*4, fp);
 	fclose(fp);
 	
-	
+int tmp;	
 	//% patch indexes for sparse recovery (avoid boundary)
 	//gridx = 3:patch_size - overlap : w-patch_size-2;
 	//gridx = [gridx, w-patch_size-2];
@@ -145,21 +145,25 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	int count_idx=0;
 	for( i=3; i<=(ncolx2-strParamScSR.patch_size-2); i+=step ){
 		gridx[count_idx] = i;	
+		dprintf("gridy[%d]=%d\n", count_idx, gridx[count_idx]);
 		count_idx++;
 	}
+	dprintf("count_idx=%d\n", count_idx);
 	int gridx_len = count_idx+1;
 	gridx[count_idx] = ncolx2-strParamScSR.patch_size-2;
 	
 	count_idx=0;
 	for( i=3; i<=(nrowx2-strParamScSR.patch_size-2); i+=step ){
 		gridy[count_idx] = i;	
+		dprintf("gridy[%d]=%d\n", count_idx, gridy[count_idx]);
 		count_idx++;
 	}
+	dprintf("count_idx=%d\n", count_idx);
+	cin>>tmp;
 	gridy[count_idx] = nrowx2-strParamScSR.patch_size-2;
-	int gridy_len = count_idx+1;
+	int gridy_len = count_idx;//+1;
 
 	int jj, kk, cnt = 0;
-			int tmp;
 
 	for( ii=0; ii<gridx_len; ii++ )
 	{
@@ -170,16 +174,16 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			//cnt = cnt+1;
 			int xx = gridx[ii]-1;
 			int yy = gridy[jj]-1;
+			dprintf("xx=%d, yy=%d\n",xx, yy);
 			//mPatch = mIm(yy:yy+patch_size-1, xx:xx+patch_size-1);
 			//mMean = mean(mPatch(:));
 			//mPatch = mPatch(:) - mMean;
 			//mNorm = sqrt(sum(mPatch.^2));
 			int pxp = strParamScSR.patch_size*strParamScSR.patch_size;
 
-			double *mPatch_tmp = new double[pxp];
-
 			copy_gray_image_d( mIm, ncolx2, nrowx2, xx, yy, 
-				mPatch_tmp, strParamScSR.patch_size, strParamScSR.patch_size );
+				mPatch, strParamScSR.patch_size, strParamScSR.patch_size );
+			/*
 			for(i=0; i<strParamScSR.patch_size; i++)
 			{
 				for(j=0; j<strParamScSR.patch_size; j++)
@@ -189,6 +193,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 //				printf("%.02f \n", mPatch[i]);
 			}
 //			cin>>tmp;
+//			*/
 
 	dprintf("checkpoint\n");
 
@@ -266,11 +271,11 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 				{
 				dprintf("checkpoint mPatchFea[%d]=%f\n", j, mPatchFea[j]);
 				}
-				cin>>tmp;
+				//cin>>tmp;
 
 			memset(b, 0, sizeof(double)*1024);
 			for( i=0; i<strParamScSR.Dlw; i++ ){
-				b[i] = -sum_of_product( DlT+i*strParamScSR.Dlh, mPatchFea, strParamScSR.Dlh ); 
+				b[i] = -sum_of_product( strParamScSR.Dl+i*strParamScSR.Dlh, mPatchFea, strParamScSR.Dlh ); 
 			}
 
 				
@@ -280,7 +285,9 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 				dprintf("checkpoint b[%d]=%f\n", i, b[i]);
 				//cin>>tmp;
 			}
+			//cin>>tmp;
 
+			dprintf("ii=%d jj=%d\n", ii, jj);
 			//% sparse recovery
 			//w = L1QP_FeatureSign_yang(lambda, A, b);
 			int d_size = 1024;//strParamScSR.Dlw*strParamScSR.Dlw;
@@ -295,16 +302,12 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 			d_size=t1;
 			*/
-	dprintf("checkpoint\n");
-
-		for(i=0; i<1024; i++)
-		{
-			dprintf("checkpoint b[%d]=%f\n", i, b[i]);
-		}
-			//cin>>tmp;
 
 			L1QP_FeatureSign_yang(strParamScSR.lambda, strParamScSR.DlTxDl, b, L1QP_w, d_size );
-	dprintf("checkpoint\n");
+			/*
+	dprintf("GOGOGOGOGO\n");
+	sleep(5);
+	*/
 			/*
 			dprintf("checkpoint I GOT OUT\n");
 			for(i=0; i<1024; i++)
@@ -319,6 +322,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			for( i=0; i<strParamScSR.Dhh; i++ ){
 				hPatch[i] = sum_of_product( strParamScSR.Dh+i*strParamScSR.Dhw, L1QP_w, strParamScSR.Dhw );  
 			}
+
 
 	dprintf("checkpoint\n");
 			// lin_scale
@@ -338,6 +342,12 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			for( i=0; i<strParamScSR.Dhh; i++ ){
 				hPatch[i] += mean_val;
 			}
+			
+			for(i=0; i<25; i++)
+			{
+				dprintf("hPatch[%d]=%f\n", i, hPatch[i]);
+			}
+			//cin>>tmp;
 
 
 	dprintf("checkpoint\n");
@@ -474,6 +484,8 @@ void copy_gray_image( const unsigned char *pSrc, int &src_imgw, int &src_imgh, i
 
 void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, double *pDst, int &dst_imgw, int &dst_imgh )
 {
+
+
 	int i, x, y, src_img_dim, end_x, end_y, count;
 	end_x = start_x + dst_imgw;
 	end_y = start_y + dst_imgh;
@@ -493,6 +505,7 @@ void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &s
 	if( (start_x+dst_imgw)>src_imgw ){ dst_imgw = src_imgw - start_x; }
 	if( (start_y+dst_imgh)>src_imgh ){ dst_imgh = src_imgh - start_y; }
 
+	/*
 	double *ptraa = (double*)pSrc + start_y*src_imgw + start_x;
 	double *ptrbb = pDst;
 	for( y=0; y<dst_imgh; y++ )
@@ -501,7 +514,28 @@ void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &s
 		ptraa+=src_imgw;
 		ptrbb+=dst_imgw;
 	}
+	*/
 
+	double *new_dst=new double[dst_imgw*dst_imgh];
+	
+	double *ptraa = (double*)pSrc + start_y*src_imgw + start_x;
+	double *ptrbb = new_dst;
+	for( y=0; y<dst_imgh; y++ )
+	{
+		memcpy( ptrbb, ptraa, sizeof(double)*dst_imgw ); 
+		ptraa+=src_imgw;
+		ptrbb+=dst_imgw;
+	}
+	
+	
+	for( y=0; y<dst_imgh; y++ )
+	{
+		for( x=0; x<dst_imgw; x++ )
+		{	
+			pDst[x*dst_imgh+y] = new_dst[y*dst_imgw+x];		
+		}
+	}
+	delete[]new_dst;
 
 }
 
