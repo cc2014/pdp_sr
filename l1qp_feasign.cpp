@@ -96,24 +96,27 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 	//int d_size=1024;
 	double EPS=1e-9;
 	double* grad=new double[d_size];
-	memcpy(grad, b, sizeof(double)*d_size);
+//	memcpy(grad, b, sizeof(double)*d_size);
+	memset(grad, 0, sizeof(double)*d_size);
 	memset( x_ret, 0, sizeof(double)*d_size );
 
 	double loss;
 	double max=-10000000;
 	int max_i;
-	int i;
+	int i, j;
 	double o_s, o_min=10000000;
 	//% grad=A*sparse(x)+b;==> grad=A*x+b
 	for( i=0; i<d_size; i++ ){
-		if(x_ret[i]!=0){
-			grad[i] += sum_of_product( A+i*d_size, x_ret, d_size );
-			grad[i] += b[i];
-		}
+			for(j=0; j<d_size; j++)
+			{
+					grad[i] += A[i*d_size+j]*x_ret[j]; 
+			}
+		grad[i] += b[i];
 	}
 	//% [ma mi]=max(abs(grad).*(x==0));
 	for( i=0; i<d_size; i++){
-		if(x_ret[i]==0){
+		if(x_ret[i]==0)
+		{
 			if( fabs(grad[i]) > max )
 			{
 				max=fabs(grad[i]);
@@ -121,6 +124,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 		}
 	}
+
 
 	while(true)
 	{
@@ -187,7 +191,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 				Xa[i]=x_ret[ a[i] ];
 			}
 	
-			
 			//%new b based on unchanged sign
 						
 			for( i=0; i<a_size; i++)
@@ -281,13 +284,17 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			//%cost based on changing sign
 			int s_size=0;
 			int *s=new int[idx_count];
-			for(i=0;i<a_size;i++){
-				if(Xa[i]*x_new[i]<=0){
+			for(i=0;i<a_size;i++)
+			{
+				if((Xa[i]*x_new[i])<=0)
+				{
 					s[s_size++]=i;	
 				}
 			}
 
-			if(s_size==0){
+
+			if(s_size==0)
+			{
 
 				for(i=0; i<a_size; i++ )
 				{
@@ -374,6 +381,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 					
 
 
+
 					if(o_s<o_min){
 						for( int m=0; m<idx_count; m++ ){
 							x_min[m] = x_s[m];
@@ -401,6 +409,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 			loss=o_min;
 
+
 			G_free_ivector(indx);
 			G_free_vector(col);
 			G_free_matrix(invAa);
@@ -427,14 +436,22 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 	    //% if ma <= lambda+EPS,
 		//%break;
 	    //% end
-		for( i=0; i<d_size; i++ ){
-			if(x_ret[i]!=0){
-				grad[i] = sum_of_product( A+i*d_size, x_ret, d_size );
-				grad[i] += b[i];
+
+		memset(grad, 0, d_size*sizeof(double));
+
+		for( i=0; i<d_size; i++ )
+		{
+			for(j=0; j<d_size; j++)
+			{
+				grad[i] += A[i*d_size+j]*x_ret[j]; 
 			}
+			grad[i] += b[i];
 		}
+
+
 		max=-10000000;
-		for( i=0; i<d_size; i++){
+		for( i=0; i<d_size; i++)
+		{
 			if(x_ret[i]==0){
 				if( fabs(grad[i]) > max )
 				{
@@ -450,6 +467,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 
 	}
 
+//	dprintf("checkpoint exiting!\n");
 	
 	delete[]grad;
 

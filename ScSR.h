@@ -5,6 +5,12 @@
 #include "string.h"
 #include "math.h"
 
+#if defined(_DEBUG)
+#define dprintf(fmt, ...) printf("%s():%d "fmt,__func__,__LINE__,##__VA_ARGS__)
+#else
+#define dprintf(fmt, ...)
+#endif
+
 typedef struct _ParamScSR
 {
        double up_scale, lambda, overlap;

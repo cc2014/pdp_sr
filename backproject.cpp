@@ -5,12 +5,6 @@
 #include <math.h>
 #include "img_utils.h"
 
-#if defined(_DEBUG)
-#define dprintf(fmt, ...) printf("%s():%d "fmt,__func__,__LINE__,##__VA_ARGS__)
-#else
-#define dprintf(fmt, ...)
-#endif
-
 typedef unsigned char uint8;
 
 using namespace std;

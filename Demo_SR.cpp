@@ -4,6 +4,11 @@
 //#include "stdafx.h"
 #include "ScSR.h"
 #include "alloc_util.h"
+#include <opencv/cv.h>
+#include <opencv/highgui.h>
+
+using namespace std; 
+using namespace cv; 
 
 void set_ParamScSR( ParamScSR &strParamScSR )
 {
@@ -65,12 +70,17 @@ void ReadDictionary()
     //%% --------------------
 }
 
-void Demo_SR()
+void Demo_SR()//uchar* img_data, int width, int height)
 {
 	int nrow, ncol;
 	unsigned char *im_l_y;
 	im_l_y=NULL;
 	
+	/*
+	im_l_y = img_data;
+	nrow = width;
+	ncol = height;
+	*/
 	
 	ReadDictionary();
 
@@ -180,9 +190,50 @@ void Demo_SR()
 int main(int argc, char* argv[])
 {
 
-	Demo_SR();
+	if(argc<2)
+	{
+		fprintf(stderr, "Usage: %s <path-to-file>\n\n", argv[0]);
+		exit(-1);
+	}
 
+	Mat img, img_y;
+	img=imread(argv[1]);
 
+	if(!img.data)
+	{
+		fprintf(stderr, "cannot load image: %s\n\n", argv[1]);
+		exit(-1);
+	}
+
+	/*
+	Mat Y, Cb, Cr;
+	CvMat cvimg = img;
+	// convert to YUV
+	cvtColor(img, img, CV_RGB2YCrCb);
+	cvSplit(&img, &Y, &Cr, &Cb, 0);
+
+	namedWindow("Y", CV_WINDOW_AUTOSIZE);
+	imshow("Y", Y);
+
+	namedWindow("Cb", CV_WINDOW_AUTOSIZE);
+	imshow("Cb", Cb);
+	
+	namedWindow("Cr", CV_WINDOW_AUTOSIZE);
+	imshow("Cr", Cr);
+	waitKey(0);
+	*/
+
+	Demo_SR();//img.data, img.size().width, img.size().height);
+
+	/*
+	cvMerge(&Y, &Cr, &Cb, NULL, &img);
+	cvtColor(img, img, CV_YCrCb2RGB);
+	*/
+
+	namedWindow("original", CV_WINDOW_AUTOSIZE);
+	imshow("original", img);
+
+	waitKey(0);
 
 	return 0;
 }

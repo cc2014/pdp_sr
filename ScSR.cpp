@@ -1,6 +1,11 @@
 //#include "stdafx.h"
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
 #include "ScSR.h"
 #include "img_utils.h"
+
+using namespace std;
 
 /*
 typedef struct _ParamScSR
@@ -110,9 +115,20 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	{
 		mIm[i] = (double)byte_mIm[i];
 	}
-	
+
+
+	/* read from raw data !!*/
+	FILE* fp=fopen("mIm_256x256.dat", "rb");
+	fread(mIm, sizeof(double), 256*256, fp);
+	fclose(fp);
+
 	// % extract low-resolution image features	
 	extr_lIm_fea( mIm, lImfea, nrowx2, ncolx2 );
+
+	fp = fopen("lImfea_1x256x256x4.dat", "rb");
+	fread(lImfea, sizeof(double), 256*256*4, fp);
+	fclose(fp);
+	
 	
 	//% patch indexes for sparse recovery (avoid boundary)
 	//gridx = 3:patch_size - overlap : w-patch_size-2;
@@ -143,12 +159,14 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	int gridy_len = count_idx+1;
 
 	int jj, kk, cnt = 0;
+			int tmp;
 
 	for( ii=0; ii<gridx_len; ii++ )
 	{
 		for( jj=0; jj<gridy_len; jj++ )
 		{
 			   
+			dprintf("checkpoint jj=%d\n", jj);
 			//cnt = cnt+1;
 			int xx = gridx[ii]-1;
 			int yy = gridy[jj]-1;
@@ -158,19 +176,45 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			//mNorm = sqrt(sum(mPatch.^2));
 			int pxp = strParamScSR.patch_size*strParamScSR.patch_size;
 
+			double *mPatch_tmp = new double[pxp];
+
 			copy_gray_image_d( mIm, ncolx2, nrowx2, xx, yy, 
-				mPatch, strParamScSR.patch_size, strParamScSR.patch_size );
+				mPatch_tmp, strParamScSR.patch_size, strParamScSR.patch_size );
+			for(i=0; i<strParamScSR.patch_size; i++)
+			{
+				for(j=0; j<strParamScSR.patch_size; j++)
+				{
+					mPatch[i*strParamScSR.patch_size+j]=mPatch_tmp[j*strParamScSR.patch_size+i];
+				}
+//				printf("%.02f \n", mPatch[i]);
+			}
+//			cin>>tmp;
+
+	dprintf("checkpoint\n");
 
 			double mean_val=0, mNorm=0, mfNorm=0;
 			for( kk=0; kk<pxp; kk++ ){
 				mean_val+=mPatch[kk];
 			}
+
+
 			mean_val/=pxp;
+	dprintf("checkpoint mean_val=%f pxp=%d\n", mean_val, pxp);
 			for( kk=0; kk<pxp; kk++ ){
+				dprintf("mPatch[%d] = %f : ", kk, mPatch[kk]);
 				mPatch[kk]-=mean_val;
-				mNorm+=(mPatch[kk]*mPatch[kk]);
+				dprintf("mPatch[%d] = %f \n", kk, mPatch[kk]);
+				mNorm+=pow(mPatch[kk], 2);
 			}
+			dprintf("checkpoint mNorm=%f\n", mNorm);
 			mNorm = sqrt(mNorm);
+			dprintf("checkpoint mNorm=%f\n", mNorm);
+
+			for(i=0; i<25; i++)
+			{
+				printf("%.02f \n", mPatch[i]);
+			}
+
 
 			//mPatchFea = lImfea(yy:yy+patch_size-1, xx:xx+patch_size-1, :);   
 			//mPatchFea = mPatchFea(:);
@@ -181,20 +225,26 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			//	y = mPatchFea;
 			//end
 
+	dprintf("checkpoint\n");
 			for( kk=0; kk<4; kk++ ){
 				copy_gray_image_d( lImfea+kk*(ncolx2*nrowx2), ncolx2, nrowx2, xx, yy, 
 					mPatchFea+kk*pxp, strParamScSR.patch_size, strParamScSR.patch_size );
 			}
+
+	dprintf("checkpoint\n");
+
 			for( kk=0; kk<4*pxp; kk++ ){
 				mfNorm += (mPatchFea[kk]*mPatchFea[kk]);	
 			}
+
+	dprintf("checkpoint\n");
 			mfNorm = sqrt(mfNorm);
 			if(mfNorm>1){
 				for( kk=0; kk<4*pxp; kk++ ){
 					mPatchFea[kk] /= mfNorm;	
 				}
-				
 			}
+	dprintf("checkpoint\n");
 
 			//b = -Dl'*y;
 	  //    
@@ -211,13 +261,30 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			//hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) = hIm(yy:yy+patch_size-1, xx:xx+patch_size-1) + hPatch;
 			//cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) = cntMat(yy:yy+patch_size-1, xx:xx+patch_size-1) + 1;
 
+
+				for(int j=0; j<strParamScSR.Dlh; j++ )
+				{
+				dprintf("checkpoint mPatchFea[%d]=%f\n", j, mPatchFea[j]);
+				}
+				cin>>tmp;
+
+			memset(b, 0, sizeof(double)*1024);
 			for( i=0; i<strParamScSR.Dlw; i++ ){
 				b[i] = -sum_of_product( DlT+i*strParamScSR.Dlh, mPatchFea, strParamScSR.Dlh ); 
 			}
 
+				
+	dprintf("checkpoint\n");
+			for(i=0; i<1024; i++)
+			{
+				dprintf("checkpoint b[%d]=%f\n", i, b[i]);
+				//cin>>tmp;
+			}
+
 			//% sparse recovery
 			//w = L1QP_FeatureSign_yang(lambda, A, b);
-			int d_size = strParamScSR.Dlw*strParamScSR.Dlw;
+			int d_size = 1024;//strParamScSR.Dlw*strParamScSR.Dlw;
+			/*
 			
 			int t1, t2;
 			FILE *fid = fopen( "b_1024x1.dat", "rb" );    
@@ -227,12 +294,33 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			fclose(fid);
 
 			d_size=t1;
+			*/
+	dprintf("checkpoint\n");
+
+		for(i=0; i<1024; i++)
+		{
+			dprintf("checkpoint b[%d]=%f\n", i, b[i]);
+		}
+			//cin>>tmp;
+
 			L1QP_FeatureSign_yang(strParamScSR.lambda, strParamScSR.DlTxDl, b, L1QP_w, d_size );
+	dprintf("checkpoint\n");
+			/*
+			dprintf("checkpoint I GOT OUT\n");
+			for(i=0; i<1024; i++)
+			{
+				if(L1QP_w[i]!=0)
+				{
+					dprintf("checkpoint %d =  %f \n ", i, L1QP_w[i]);
+				}
+			}
+			*/
 
 			for( i=0; i<strParamScSR.Dhh; i++ ){
 				hPatch[i] = sum_of_product( strParamScSR.Dh+i*strParamScSR.Dhw, L1QP_w, strParamScSR.Dhw );  
 			}
 
+	dprintf("checkpoint\n");
 			// lin_scale
 			double hNorm=0,s;
 			for( i=0; i<strParamScSR.Dhh; i++ ){
@@ -240,8 +328,9 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			}
 			hNorm = sqrt(hNorm);
 
+	dprintf("checkpoint\n");
 			if(hNorm!=0){
-				s=mfNorm*1.2/hNorm;
+				s=mNorm*1.2/hNorm;
 				for( i=0; i<strParamScSR.Dhh; i++ ){
 					hPatch[i] *= s;
 				}
@@ -251,13 +340,15 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			}
 
 
+	dprintf("checkpoint\n");
 			set_patch_image( hIm, cntMat, ncolx2, nrowx2, xx, yy, 
 				hPatch, strParamScSR.patch_size, strParamScSR.patch_size );
+	dprintf("checkpoint\n");
 
-
-			cnt++;
 		}
+	dprintf("checkpoint\n");
 	}
+	dprintf("checkpoint\n");
 
 	for( i=0; i<(ncolx2*nrowx2); i++ )
 	{
@@ -267,6 +358,9 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 		}
 		hIm[i]/=cntMat[i];
 	}
+
+
+	dprintf("checkpoint\n");
 
 	// cast to int8
 
@@ -393,7 +487,7 @@ void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &s
 	pDst[count++] = pSrc[i];
 	}
 	}
-	}//*/
+	}*/
 	if( start_x<0 ){ start_x = 0; }
 	if( start_y<0 ){ start_y = 0; }
 	if( (start_x+dst_imgw)>src_imgw ){ dst_imgw = src_imgw - start_x; }
