@@ -9,7 +9,7 @@
 #include "ScSR.h"
 #include "alloc_util.h"
 
-#define dprintf(fmt, ...) 
+#define dprintf(fmt, ...)
 
 using namespace std;
 //using namespace arma;
@@ -95,7 +95,6 @@ end
 // x_ret: 1024x1 double array, representing resolved coefficients.
 void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x_ret, int &d_size)
 {
-	int tmp;
 	//int d_size=1024;
 	double EPS=1e-9;
 	double* grad=new double[d_size];
@@ -158,7 +157,11 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 					break;
 			}
 			if(i==d_size)
+			{
+		dprintf("leaving L1QP Hell~~~~\n");	
+		//sleep(1);
 				break;
+			}
 		}
 
 
@@ -179,17 +182,26 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			int *idx=new int[d_size];
 			int i, j, k, a_size=0, idx_count=0;
 			//%a=x~=0;   %active set
+			memset(a, 0, sizeof(int)*d_size);
 			for( i=0; i<d_size; i++){
 				if(x_ret[i]!=0)	{
 					a[a_size++] = i;
 				}
 			}
+			/*
+			for(i=0; i<d_size; i++)
+			{
+				sleep(1);
+			}
+			*/
 			// attention: a_size>0
 			double *Aa = new double[a_size*a_size];
 			double *Ba = new double[a_size];
 			double *Xa = new double[a_size];
 			double *vect=new double[a_size];
 			double * x_new = new double[d_size];
+
+			memset(Xa, 0, sizeof(double)*a_size);
 
 			//%Aa=A(a,a);
 			//%ba=b(a);
@@ -300,10 +312,13 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			//%cost based on changing sign
 			int s_size=0;
 			int *s=new int[idx_count];
-			for(i=0;i<a_size;i++)
+//			for(i=0;i<a_size;i++)
+			for(i=0; i<idx_count; i++)
 			{
 				if((Xa[i]*x_new[i])<=0)
 				{
+			dprintf("Xa[%d]=%f x_new=%f *= %f\n", i, Xa[i], x_new[i], (Xa[i]*x_new[i]));
+			//sleep(1);
 					s[s_size++]=i;	
 				}
 			}
@@ -396,31 +411,34 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 						for( int n=0; n<idx_count; n++ )
 						{
 							Aa_idx[m*idx_count+n] = Aa[ idx[m]*a_size+idx[n] ];
-							dprintf("Aa_idx[%d]=%f\n", m*idx_count+n, Aa_idx[m*idx_count+n]);
+							//dprintf("Aa_idx[%d]=%f\n", m*idx_count+n, Aa_idx[m*idx_count+n]);
 						}
 						ttvec2[m] = x_s[ idx[m] ];
-						dprintf("ttvec2[%d]=%f\n", m, ttvec2[m]);
+						//dprintf("ttvec2[%d]=%f\n", m, ttvec2[m]);
 					}
 					//cin>>tmp;
 
 					
-					for( int m=0; m<idx_count; m++ ){
+					for( int m=0; m<idx_count; m++ )
+					{
 						ttvec[m] = sum_of_product( Aa_idx+m*idx_count, ttvec2, idx_count );  
 						ttvec[m] /= 2;
 						ttvec[m] += Ba[idx[m]];
-						dprintf("Ba[%d]=%f\n", idx[m], Ba[idx[m]]);
-						dprintf("ttvec[m]=%f\n", ttvec[m]);
+					//	dprintf("Ba[%d]=%f\n", idx[m], Ba[idx[m]]);
+					//	dprintf("ttvec[m]=%f\n", ttvec[m]);
 
 						o_s += ( ttvec[m]*x_s[ idx[m] ] + lambda*fabs( x_s[ idx[m] ] ) );
 					}
 					
-				dprintf("o_s=%f\n", o_s);
+				dprintf("o_s=%f o_min=%f\n", o_s, o_min);
 				//cin>>tmp;
 
 
 					if(o_s<o_min){
-						for( int m=0; m<idx_count; m++ ){
+							memset(x_min, 0, sizeof(double)*a_size);
+						for( int m=0; m<a_size; m++ ){
 							x_min[m] = x_s[m];
+							dprintf("x_min[%d]=%f \n", m, x_min[m]);
 						}
 						o_min=o_s;
 					}
@@ -442,9 +460,9 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			for( i=0; i<a_size; i++ )
 			{
 				x_ret[a[i]] = x_min[i];				
+				dprintf("x_ret[%d]=%f\n", a[i], x_ret[a[i]]);
 			}
 			loss=o_min;
-
 			dprintf("loss=%f\n", loss);
 			//cin>>tmp;
 
@@ -490,7 +508,8 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 		max=-10000000;
 		for( i=0; i<d_size; i++)
 		{
-			if(x_ret[i]==0){
+			if(x_ret[i]==0)
+			{
 				if( fabs(grad[i]) > max )
 				{
 					max=fabs(grad[i]);
@@ -499,7 +518,11 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 		}
 
-		if(max<=(lambda+EPS)){
+
+		if(max<=(lambda+EPS))
+		{
+		dprintf("leaving L1QP Hell~~~~\n");	
+		//sleep(1);
 			break;
 		}
 

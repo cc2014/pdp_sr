@@ -228,12 +228,12 @@ int main(int argc, char* argv[])
 	/*
 	cvMerge(&Y, &Cr, &Cb, NULL, &img);
 	cvtColor(img, img, CV_YCrCb2RGB);
-	*/
 
 	namedWindow("original", CV_WINDOW_AUTOSIZE);
 	imshow("original", img);
 
 	waitKey(0);
+	*/
 
 	return 0;
 }
