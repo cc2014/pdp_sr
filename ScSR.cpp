@@ -48,23 +48,8 @@ void extr_lIm_fea( double *lIm, double *lImFea, int &nrow, int &ncol  )
 
 
 }
-int write_pgm_y(char* filename, int x_dim, int y_dim, unsigned char* image)
-{
 
-  unsigned char* y = image;
-  FILE* filehandle;
-  filehandle = fopen(filename, "wb");
-  if (filehandle) {
-    fprintf(filehandle, "P5\n\n%d %d 255\n", x_dim, y_dim);
-    fwrite(y, 1, x_dim * y_dim, filehandle);
-    fclose(filehandle);
-    return 0;
-  } else
-    return 1;
-
-}
-
-bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR )
+bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR, double *hIm )
 {
 	// % bicubic interpolation of the low-resolution image
 	// mIm = single(imresize(lIm, up_scale, 'bicubic'));
@@ -77,7 +62,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	int i, j, ii, jj, nrowx2, ncolx2;
 	unsigned char *byte_mIm;
 	double *mIm, *lImfea;
-	double *DlT, *hIm;
+	double *DlT;//, *hIm;
 	int *cntMat;
 	DlT = new double[strParamScSR.Dlw*strParamScSR.Dlh];
     
@@ -100,14 +85,14 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	}
 	resize_image_bau( im_l_y, byte_mIm, nrow, ncol, nrowx2, ncolx2 ); 
 	
-	write_pgm_y( "im_l_y_scale2.pgm", nrowx2, ncolx2, byte_mIm );
+	//write_pgm_y( "im_l_y_scale2.pgm", nrowx2, ncolx2, byte_mIm );
 
-	hIm = new double[nrowx2*ncolx2];
+	//hIm = new double[nrowx2*ncolx2];
 	cntMat = new int[nrowx2*ncolx2];
 	memset( hIm, 0, sizeof(double)*nrowx2*ncolx2 );
 	memset( cntMat, 0, sizeof(int)*nrowx2*ncolx2 );
 
-#pragma omp parllel for private(byte_mIm)
+#pragma omp parallel for private(byte_mIm)
 	for( i=0; i<(nrowx2*ncolx2); i++ )
 	{
 		mIm[i] = (double)byte_mIm[i];
@@ -115,16 +100,20 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 
 	/* read from raw data !!*/
+	/*
 	FILE* fp=fopen("mIm_256x256.dat", "rb");
 	fread(mIm, sizeof(double), 256*256, fp);
 	fclose(fp);
+	*/
 
 	// % extract low-resolution image features	
 	extr_lIm_fea( mIm, lImfea, nrowx2, ncolx2 );
 
+	/*
 	fp = fopen("lImfea_1x256x256x4.dat", "rb");
 	fread(lImfea, sizeof(double), 256*256*4, fp);
 	fclose(fp);
+	*/
 	
 	//% patch indexes for sparse recovery (avoid boundary)
 	//gridx = 3:patch_size - overlap : w-patch_size-2;
@@ -154,13 +143,17 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	gridy[count_idx] = nrowx2-strParamScSR.patch_size-2;
 	int gridy_len = count_idx;//+1;
 
-#pragma omp parallel for
+#pragma omp parallel 
+{
+#pragma omp for collapse(2)
 	for( ii=0; ii<gridx_len; ii++ )
 	{
 		for( jj=0; jj<gridy_len; jj++ )
 		{
+
+			dprintf("running ii=%d jj=%d\n", ii, jj);
 			   
-			int i, kk, cnt = 0;
+			int i, kk=0;
 			//cnt = cnt+1;
 			int xx = gridx[ii]-1;
 			int yy = gridy[jj]-1;
@@ -217,9 +210,14 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 			}
 
 			mfNorm = sqrt(mfNorm);
-			if(mfNorm>1){
-				for( kk=0; kk<4*pxp; kk++ ){
-					mPatchFea[kk] /= mfNorm;	
+			if(mfNorm>1)
+			{
+				double mfNorm2 = 1.0/mfNorm;
+				{
+					for( kk=0; kk<4*pxp; kk++ ){
+						//mPatchFea[kk] /= mfNorm;	
+						mPatchFea[kk] *= mfNorm2;	
+					}
 				}
 			}
 
@@ -283,6 +281,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 
 		}
 	}
+}
 
 	for( i=0; i<(ncolx2*nrowx2); i++ )
 	{
@@ -296,6 +295,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	// cast to int8
 
 
+	/*
 	dprintf("writing image\n");
 	unsigned char *pShowImage=new unsigned char[ncolx2*nrowx2];
 	
@@ -306,7 +306,9 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	
 	write_pgm_y( "pShowImage.pgm", ncolx2, ncolx2, pShowImage );
 	
+	
 	delete[]pShowImage;
+	*/
 
 	delete[]gridx;
 	delete[]gridy;
@@ -314,7 +316,7 @@ bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR 
 	delete[]lImfea;
 	delete[]mIm;
 	delete[]DlT;
-	delete[]hIm;
+//	delete[]hIm;
 	delete[]cntMat;
 
 
@@ -380,7 +382,7 @@ void set_patch_image( double *pSrc, int *labelMtx, int &src_imgw, int &src_imgh,
 #else
 
 
-    int i, j, x, y, src_img_dim, end_x, end_y, count;
+    int i, j, ii, x, y, end_x, end_y, count;
     end_x = start_x + dst_imgw;
     end_y = start_y + dst_imgh;
  
@@ -394,9 +396,10 @@ void set_patch_image( double *pSrc, int *labelMtx, int &src_imgw, int &src_imgh,
     double *new_dst=new double[dst_imgw*dst_imgh];
     for( i=0; i<dst_imgh; i++ )
     {
+        ii=i*dst_imgw;
         for( j=0; j<dst_imgw; j++ )
         {
-            new_dst[j*dst_imgh+i] = pDst[i*dst_imgw+j];   
+            new_dst[j*dst_imgh+i] = pDst[ii+j];   
 
         }
     }
@@ -423,7 +426,7 @@ void set_patch_image( double *pSrc, int *labelMtx, int &src_imgw, int &src_imgh,
 }
 void copy_gray_image( const unsigned char *pSrc, int &src_imgw, int &src_imgh, int &start_x, int &start_y, unsigned char *pDst, int &dst_imgw, int &dst_imgh )
 {
-	int i, x, y, src_img_dim, end_x, end_y, count;
+	int y, end_x, end_y, count;
 	end_x = start_x + dst_imgw;
 	end_y = start_y + dst_imgh;
 
@@ -458,7 +461,7 @@ void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &s
 {
 
 
-	int i, x, y, src_img_dim, end_x, end_y, count;
+	int x, y, yy, end_x, end_y, count;
 	end_x = start_x + dst_imgw;
 	end_y = start_y + dst_imgh;
 
@@ -502,9 +505,10 @@ void copy_gray_image_d( const double *pSrc, int &src_imgw, int &src_imgh, int &s
 	
 	for( y=0; y<dst_imgh; y++ )
 	{
+		yy=y*dst_imgw;
 		for( x=0; x<dst_imgw; x++ )
 		{	
-			pDst[x*dst_imgh+y] = new_dst[y*dst_imgw+x];		
+			pDst[x*dst_imgh+y] = new_dst[yy+x];		
 		}
 	}
 	delete[]new_dst;

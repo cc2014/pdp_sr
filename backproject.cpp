@@ -5,7 +5,6 @@
 #include <math.h>
 #include "img_utils.h"
 
-typedef unsigned char uint8;
 
 using namespace std;
 
@@ -242,7 +241,6 @@ bool convolve2DSeparableBP(double* in, double* out, int dataSizeX, int dataSizeY
 } 
 
 
-/*
 void resize_image_d( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ) 
 { 
  
@@ -434,53 +432,29 @@ end
 */   
 
 
-void backprojection (uint8* im_h, const int &width_h, const int &height_h, 
-		uint8* im_l, const int &width_l, const int &height_l, const int &maxIter, double* im_ret)
+void backprojection (double* im_ret, const int &width_h, const int &height_h, 
+		uint8* im_l, const int &width_l, const int &height_l, const int &maxIter )
 {
-	/* create gaussian filter. 
-	 * ====================================================== *
-	int g_size=5;
-	double sigma=1.0;
-	double gKernel[g_size*g_size];
-	double sum=0;
-
-	createFilter(gKernel, g_size, sigma);
-
-    for(int i = 0; i < g_size; ++i)
-        for(int j = 0; j < g_size; ++j)
-			gKernel[i*g_size+j]=pow(gKernel[i*g_size+j], 2);
-
-    for(int i = 0; i < g_size; ++i)
-        for(int j = 0; j < g_size; ++j)
-			sum+=gKernel[i*g_size+j];
-
-    for(int i = 0; i < g_size; ++i)
-        for(int j = 0; j < g_size; ++j)
-			gKernel[i*g_size+j]=gKernel[i*g_size+j]/sum;
-
-	* ====================================================== *
-	*/
 
 	double* im_l_s = new double[width_l*height_l];
 	double* im_diff = new double[width_l*height_l];
 	double* im_diff_h = new double[width_h*height_h];
 	double* im_diff_conv = new double[width_h*height_h];
-
-    double kernelX[5] = { 1/16.0f,  4/16.0f,  6/16.0f,  4/16.0f, 1/16.0f };   
-    double kernelY[5] = { 1/16.0f,  4/16.0f,  6/16.0f,  4/16.0f, 1/16.0f };   
-
 	double* im_l_d = new double[width_l*height_l];
 
 	/* convert uint8 to double */
+	/*
 	for(int i=0; i<width_h*height_h; i++)
 	{
 		im_ret[i]=(double)im_h[i];
 	}
+	*/
 
 	for(int i=0; i<width_l*height_l; i++)
 	{
 		im_l_d[i]=(double)im_l[i];
 	}
+
 
 	/*
 	 * first downscale im_h to im_l_s, then calculate diff between im_l and im_l_s, 
@@ -490,29 +464,13 @@ void backprojection (uint8* im_h, const int &width_h, const int &height_h,
 	{
 		resize_image_d(im_ret, im_l_s, width_h, height_h, width_l, height_l);
 
-		for(int z=0; z<256; z++)
-		{
-			printf("%f ", im_l_s[z]);
-		}
-		sleep(5);
-
 		for(int i = 0; i<width_l; i++)
 			for(int j = 0; j<height_l; j++)
 				im_diff[i*width_l+j]=(double)im_l_d[i*width_l+j] - im_l_s[i*width_l+j];
 
-		/*
-	for(int i=0; i<256; i++)
-	{
-		for(int j=0; j<1; j++)
-		{
-			printf("%f ", im_diff[i*256+j]);
-		}
-	}
-	*/
-
 		resize_image_d(im_diff, im_diff_h, width_l, height_l, width_h, height_h);
 
-		convolve2DSeparableBP(im_diff_h, im_diff_conv, width_h, height_h,  kernelX, 5, kernelY, 5);
+		convolve2D(im_diff_h, im_diff_conv, width_h, height_h,  p, 5, 5);
 
 		for(int i = 0; i<width_h; i++)
 			for(int j = 0; j<height_h; j++)
@@ -526,57 +484,3 @@ void backprojection (uint8* im_h, const int &width_h, const int &height_h,
 	delete [] im_diff_h;
 	delete [] im_diff_conv;
 }
-
-/* final p used in backprojection */
-/*
- 0.0001  0.0021  0.0058  0.0021  0.0001  
- 0.0021  0.0431  0.1171  0.0431  0.0021  
- 0.0058  0.1171  0.3183  0.1171  0.0058  
- 0.0021  0.0431  0.1171  0.0431  0.0021  
- 0.0001  0.0021  0.0058  0.0021  0.0001 
-*/
-
-
-#if 0
-int main(int argc, char* argv[])
-{
-	FILE *im_h_fp = NULL;
-	FILE *im_l_fp = NULL;
-
-	im_h_fp = fopen("./im_h.dat", "rb");
-	im_l_fp = fopen("./im_l.dat", "rb");
-
-	int size_h=256, size_l=128;
-	double* im_final = (double*)malloc(size_h*size_h*sizeof(double));
-	uint8* im_h = (uint8*)malloc(size_h*size_h*sizeof(uint8));
-	uint8* im_l = (uint8*)malloc(size_l*size_l*sizeof(uint8));
-	fread(im_h, sizeof(uint8),  256*256, im_h_fp );
-	fread(im_l, sizeof(uint8),  128*128, im_l_fp );
-
-	backprojection(im_h, 256, 256, im_l, 128, 128, 20, im_final);
-
-	FILE* im_out=NULL;
-	im_out = fopen("./im_out.dat", "wb");
-	fwrite(im_final, sizeof(double), 256*256, im_out);
-
-	/*
-	for(int i=0; i<256; i++)
-	{
-		for(int j=0; j<256; j++)
-		{
-			printf("%f ", im_final[i*256+j]);
-		}
-		printf("\n");
-	}
-	*/
-
-
-	free(im_final);
-	free(im_h);
-	free(im_l);
-	return 0;
-
-
-
-}
-#endif

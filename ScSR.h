@@ -5,12 +5,6 @@
 #include "string.h"
 #include "math.h"
 
-#if defined(_DEBUG)
-#define dprintf(fmt, ...) printf("%s():%d "fmt,__func__,__LINE__,##__VA_ARGS__)
-#else
-#define dprintf(fmt, ...)
-#endif
-
 typedef struct _ParamScSR
 {
        double up_scale, lambda, overlap;
@@ -20,7 +14,7 @@ typedef struct _ParamScSR
 	   int DlTxDl_h, DlTxDl_w;	
 }ParamScSR;
 
-bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR );
+bool ScSR( unsigned char *im_l_y, int &nrow, int &ncol, ParamScSR &strParamScSR , double*);
 void resize_image_d( double *src_data, double *dst_data, const int &src_w, const int &src_h, const int &dst_w, const int &dst_h ); 
 void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x_ret, int &d_size);
 double sum_of_product( double *vector_a, double *vector_b, int vector_length );

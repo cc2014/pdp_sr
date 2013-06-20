@@ -5,14 +5,11 @@
 #include <cstring>
 #include <cmath>
 #include <vector>
-//#include <armadillo>
+#include "img_utils.h"
 #include "ScSR.h"
 #include "alloc_util.h"
 
-#define dprintf(fmt, ...)
-
 using namespace std;
-//using namespace arma;
 
 /* 
  * matlab code for solving L1QP 
@@ -106,7 +103,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 	double max=-10000000;
 	int max_i;
 	int i, j;
-	double o_s, o_min=10000000;
 	//% grad=A*sparse(x)+b;==> grad=A*x+b
 	for( i=0; i<d_size; i++ ){
 			for(j=0; j<d_size; j++)
@@ -158,8 +154,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			}
 			if(i==d_size)
 			{
-		dprintf("leaving L1QP Hell~~~~\n");	
-		//sleep(1);
 				break;
 			}
 		}
@@ -276,9 +270,7 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			// inv(Aa)*vect
 			for( i=0; i<a_size; i++){
 				x_new[i] = sum_of_product( invAa_raw+i*a_size, vect, a_size );
-			//	dprintf("checkpoint x_new[%d]=%f\n", i, x_new[i]);
 			}
-			//cin>>tmp;
 			delete [] invAa_raw;
 
 			//%idx = find(x_new);
@@ -317,8 +309,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			{
 				if((Xa[i]*x_new[i])<=0)
 				{
-			dprintf("Xa[%d]=%f x_new=%f *= %f\n", i, Xa[i], x_new[i], (Xa[i]*x_new[i]));
-			//sleep(1);
 					s[s_size++]=i;	
 				}
 			}
@@ -367,23 +357,16 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 				x_min[i] = x_new[i];
 				//o_min[i] = o_new[i];
 				temp[i] = (x_new[i] - Xa[i])/Xa[i];
-				dprintf("x_min[%d]=%f temp[%d]=%f\n", i, x_min[i], i, temp[i]);
 			}
 			o_min = o_new;
-
-			dprintf("o_min=%f\n", o_min);
-				//cin>>tmp;
 
 
 			for( int zd=0; zd<s_size; zd++ )
 			{
 
-				dprintf("s[%d]=%d\n", zd, s[zd]);
 				
 				for( k=0; k<a_size; k++ ){
 					x_s[k] = Xa[k] - (x_new[k] - Xa[k])/temp[ s[zd] ]; 
-					dprintf("x_s[%d]=%f\n", k, x_s[k]);
-					
 				}
 				//cin>>tmp;
 				x_s[s[zd]] = 0; // %make sure it's zero
@@ -391,11 +374,9 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 				idx_count=0;
 				for( k=0; k<a_size; k++ ){
 					if(x_s[k]!=0){
-						dprintf("idx[%d]=%d\n", idx_count, k);
 						idx[idx_count++] = k;
 					}
 				}
-				dprintf("idxcount=%d\n", idx_count);
 
 				//
 				//%o_s = (Aa(idx, idx)*x_s(idx)/2 + ba(idx))'*x_s(idx)+lambda*sum(abs(x_s(idx)));
@@ -411,10 +392,8 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 						for( int n=0; n<idx_count; n++ )
 						{
 							Aa_idx[m*idx_count+n] = Aa[ idx[m]*a_size+idx[n] ];
-							//dprintf("Aa_idx[%d]=%f\n", m*idx_count+n, Aa_idx[m*idx_count+n]);
 						}
 						ttvec2[m] = x_s[ idx[m] ];
-						//dprintf("ttvec2[%d]=%f\n", m, ttvec2[m]);
 					}
 					//cin>>tmp;
 
@@ -424,21 +403,15 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 						ttvec[m] = sum_of_product( Aa_idx+m*idx_count, ttvec2, idx_count );  
 						ttvec[m] /= 2;
 						ttvec[m] += Ba[idx[m]];
-					//	dprintf("Ba[%d]=%f\n", idx[m], Ba[idx[m]]);
-					//	dprintf("ttvec[m]=%f\n", ttvec[m]);
 
 						o_s += ( ttvec[m]*x_s[ idx[m] ] + lambda*fabs( x_s[ idx[m] ] ) );
 					}
 					
-				dprintf("o_s=%f o_min=%f\n", o_s, o_min);
-				//cin>>tmp;
-
 
 					if(o_s<o_min){
 							memset(x_min, 0, sizeof(double)*a_size);
 						for( int m=0; m<a_size; m++ ){
 							x_min[m] = x_s[m];
-							dprintf("x_min[%d]=%f \n", m, x_min[m]);
 						}
 						o_min=o_s;
 					}
@@ -458,12 +431,8 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 			
 			//delete [] idx_buffer2;
 			for( i=0; i<a_size; i++ )
-			{
 				x_ret[a[i]] = x_min[i];				
-				dprintf("x_ret[%d]=%f\n", a[i], x_ret[a[i]]);
-			}
 			loss=o_min;
-			dprintf("loss=%f\n", loss);
 			//cin>>tmp;
 
 			G_free_ivector(indx);
@@ -521,8 +490,6 @@ void L1QP_FeatureSign_yang(const double &lambda, double* A, double* b, double* x
 
 		if(max<=(lambda+EPS))
 		{
-		dprintf("leaving L1QP Hell~~~~\n");	
-		//sleep(1);
 			break;
 		}
 

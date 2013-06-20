@@ -4,6 +4,7 @@
 //#include "stdafx.h"
 #include "ScSR.h"
 #include "alloc_util.h"
+#include "img_utils.h"
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
 
@@ -70,20 +71,15 @@ void ReadDictionary()
     //%% --------------------
 }
 
-void Demo_SR()//uchar* img_data, int width, int height)
+void Demo_SR(uchar* im_l_y, int width, int height, uint8* img_result)
 {
 	int nrow, ncol;
-	unsigned char *im_l_y;
-	im_l_y=NULL;
-	
-	/*
-	im_l_y = img_data;
 	nrow = width;
 	ncol = height;
-	*/
 	
 	ReadDictionary();
 
+	/*
     FILE *fid = fopen( "im_l_y.dat", "rb" );    
     fread( &nrow, 1, sizeof(int), fid );
 	fread( &ncol, 1, sizeof(int), fid );    	
@@ -93,6 +89,102 @@ void Demo_SR()//uchar* img_data, int width, int height)
 	}
 	fread( im_l_y, (nrow*ncol), sizeof(unsigned char), fid );
     fclose(fid);
+	*/
+
+	int hnrow= (nrow<<1) ;
+	int hncol = (ncol<<1);
+	double* im_h_y = new double[hnrow*hncol];
+
+	ScSR( im_l_y, nrow, ncol, g_ParamScSR, im_h_y );
+
+	backprojection(im_h_y, hnrow, hncol, im_l_y, nrow, ncol, 20);
+
+	for(int i=0;i<(hnrow*hncol);i++ )
+		img_result[i] = (uint8)im_h_y[i];
+	
+	free_ParamScSR(g_ParamScSR);
+//	delete [] im_l_y;
+	delete [] im_h_y;
+}
+
+//int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, char* argv[])
+{
+	if(argc<2)
+	{
+		fprintf(stderr, "Usage: %s <path-to-file>\n\n", argv[0]);
+		exit(-1);
+	}
+
+	Mat img;
+	img=imread(argv[1], 1);
+
+	if(!img.data)
+	{
+		fprintf(stderr, "cannot load image: %s\n\n", argv[1]);
+		exit(-1);
+	}
+
+	Mat img_yuv;
+	vector<Mat> img_y;
+	// convert to YUV
+	cvtColor(img, img_yuv, CV_RGB2YCrCb);
+
+	split(img_yuv, img_y);
+
+	int hnrow=img.size().width*2;
+	int hncol=img.size().height*2;
+	uint8* img_result = new uint8[hnrow*hncol];
+
+	Demo_SR(img_y[0].data, img.size().width, img.size().height, img_result);
+
+	Mat Y, Cr, Cb;
+
+	resize(img_y[0], Y, img.size()*2, 0, 0, INTER_CUBIC);
+	resize(img_y[1], Cr, img.size()*2, 0, 0, INTER_CUBIC);
+	resize(img_y[2], Cb, img.size()*2, 0, 0, INTER_CUBIC);
+
+	Y.data = img_result;
+	img_y[0] = Y;
+	img_y[1] = Cr;
+	img_y[2] = Cb;
+
+	namedWindow("Y", CV_WINDOW_AUTOSIZE);
+	imshow("Y", img_y[0]);
+
+	namedWindow("Cb", CV_WINDOW_AUTOSIZE);
+	imshow("Cb", img_y[1]);
+	
+	namedWindow("Cr", CV_WINDOW_AUTOSIZE);
+	imshow("Cr", img_y[2]);
+	waitKey(0);
+
+	Mat result_y, result;
+	merge(img_y, result_y);
+	cvtColor(result_y, result, CV_YCrCb2RGB);
+
+
+	Mat img_cubic;
+	resize(img, img_cubic, img.size()*2, 0, 0, INTER_CUBIC);
+
+	imwrite("upscaled_img.jpg", result);
+
+	namedWindow("original", CV_WINDOW_AUTOSIZE);
+	imshow("original", img);
+
+	namedWindow("bicubic interpolation", CV_WINDOW_AUTOSIZE);
+	imshow("bicubic interpolation", img_cubic);
+
+	namedWindow("upscaled", CV_WINDOW_AUTOSIZE);
+	imshow("upscaled", result);
+
+	waitKey(0);
+
+	delete [] img_result;
+
+	return 0;
+}
+
 
 
 #if 0 // sample for finding invert matrix
@@ -153,88 +245,3 @@ void Demo_SR()//uchar* img_data, int width, int height)
 	delete[]Aa;
 
 #endif
-
-
-
-#if 0
-	unsigned char *im_h_y = new unsigned char[nrow*ncol*4];
-	fid = fopen( "im_h_y_256x256.dat", "rb" );
-	fread( im_h_y, (nrow*ncol*4), sizeof(unsigned char), fid );
-    fclose(fid);
-	
-	double *src_image=new double[nrow*ncol*4];
-	double *dst_image=new double[nrow*ncol];
-	// test
-	int src_nrow = (nrow<<1);
-	int src_ncol = (ncol<<1);
-
-	int dst_nrow = (nrow);
-	int dst_ncol = (ncol);
-	for( int i=0; i<(nrow*ncol*4); i++ )
-	{
-		src_image[i] = im_h_y[i];
-	}
-	resize_image_d( src_image, dst_image, src_nrow, src_ncol, dst_nrow, dst_ncol ); 
-
-	delete[]dst_image;
-	delete[]src_image;
-#endif
-	ScSR( im_l_y, nrow, ncol, g_ParamScSR );
-	
-	if(im_l_y!=NULL){delete[]im_l_y;im_l_y=NULL;}
-	
-	free_ParamScSR(g_ParamScSR);
-}
-
-//int _tmain(int argc, _TCHAR* argv[])
-int main(int argc, char* argv[])
-{
-
-	if(argc<2)
-	{
-		fprintf(stderr, "Usage: %s <path-to-file>\n\n", argv[0]);
-		exit(-1);
-	}
-
-	Mat img, img_y;
-	img=imread(argv[1]);
-
-	if(!img.data)
-	{
-		fprintf(stderr, "cannot load image: %s\n\n", argv[1]);
-		exit(-1);
-	}
-
-	/*
-	Mat Y, Cb, Cr;
-	CvMat cvimg = img;
-	// convert to YUV
-	cvtColor(img, img, CV_RGB2YCrCb);
-	cvSplit(&img, &Y, &Cr, &Cb, 0);
-
-	namedWindow("Y", CV_WINDOW_AUTOSIZE);
-	imshow("Y", Y);
-
-	namedWindow("Cb", CV_WINDOW_AUTOSIZE);
-	imshow("Cb", Cb);
-	
-	namedWindow("Cr", CV_WINDOW_AUTOSIZE);
-	imshow("Cr", Cr);
-	waitKey(0);
-	*/
-
-	Demo_SR();//img.data, img.size().width, img.size().height);
-
-	/*
-	cvMerge(&Y, &Cr, &Cb, NULL, &img);
-	cvtColor(img, img, CV_YCrCb2RGB);
-
-	namedWindow("original", CV_WINDOW_AUTOSIZE);
-	imshow("original", img);
-
-	waitKey(0);
-	*/
-
-	return 0;
-}
-

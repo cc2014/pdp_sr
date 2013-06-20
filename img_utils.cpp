@@ -1,7 +1,89 @@
 #include "img_utils.h"
 #include "math.h"
 
+int write_pgm_y(char* filename, int x_dim, int y_dim, unsigned char* image)
+{
 
+  unsigned char* y = image;
+  FILE* filehandle;
+  filehandle = fopen(filename, "wb");
+  if (filehandle) {
+    fprintf(filehandle, "P5\n\n%d %d 255\n", x_dim, y_dim);
+    fwrite(y, 1, x_dim * y_dim, filehandle);
+    fclose(filehandle);
+    return 0;
+  } else
+    return 1;
+
+}
+
+bool convolve2D(double* in, double* out, int dataSizeX, int dataSizeY,    
+                double* kernel, int kernelSizeX, int kernelSizeY)   
+{   
+    int i, j, m, n;   
+    double *inPtr, *inPtr2, *outPtr, *kPtr;   
+    int kCenterX, kCenterY;   
+    int rowMin, rowMax;                             // to check boundary of input array   
+    int colMin, colMax;                             //   
+   
+    // check validity of params   
+    if(!in || !out || !kernel) return false;   
+    if(dataSizeX <= 0 || kernelSizeX <= 0) return false;   
+   
+    // find center position of kernel (half of kernel size)   
+    kCenterX = kernelSizeX >> 1;   
+    kCenterY = kernelSizeY >> 1;   
+   
+    // init working  pointers   
+    inPtr = inPtr2 = &in[dataSizeX * kCenterY + kCenterX];  // note that  it is shifted (kCenterX, kCenterY),   
+    outPtr = out;   
+    kPtr = kernel;   
+   
+    // start convolution   
+    for(i= 0; i < dataSizeY; ++i)                   // number of rows   
+    {   
+        // compute the range of convolution, the current row of kernel should be between these   
+        rowMax = i + kCenterY;   
+        rowMin = i - dataSizeY + kCenterY;   
+   
+        for(j = 0; j < dataSizeX; ++j)              // number of columns   
+        {   
+            // compute the range of convolution, the current column of kernel should be between these   
+            colMax = j + kCenterX;   
+            colMin = j - dataSizeX + kCenterX;   
+   
+            *outPtr = 0;                            // set to 0 before accumulate   
+   
+            // flip the kernel and traverse all the kernel values   
+            // multiply each kernel value with underlying input data   
+            for(m = 0; m < kernelSizeY; ++m)        // kernel rows   
+            {   
+                // check if the index is out of bound of input array   
+                if(m <= rowMax && m > rowMin)   
+                {   
+                    for(n = 0; n < kernelSizeX; ++n)   
+                    {   
+                        // check the boundary of array   
+                        if(n <= colMax && n > colMin)   
+                            *outPtr += *(inPtr - n) * *kPtr;   
+                        ++kPtr;                     // next kernel   
+                    }   
+                }   
+                else   
+                    kPtr += kernelSizeX;            // out of bound, move to next row of kernel   
+   
+                inPtr -= dataSizeX;                 // move input data 1 raw up   
+            }   
+   
+            kPtr = kernel;                          // reset kernel to (0,0)   
+            inPtr = ++inPtr2;                       // next input   
+            ++outPtr;                               // next output   
+        }   
+    }   
+   
+    return true;   
+}   
+  
 
 bool convolve2DSeparableBP(double* in, double* out, int dataSizeX, int dataSizeY,    
                          double* kernelX, int kSizeX, double* kernelY, int kSizeY)   
@@ -385,7 +467,7 @@ void resize_image_bau( unsigned char *src_data, unsigned char *dst_data, const i
     double sr, sc, ratior, ratioc, value1, value2;  
     int dr, dc, isr, isc; 
     unsigned char *imgp; 
-    int dd, t, stepr, stepc, ii, b1, b2; 
+    int dd, ii, b1, b2; 
  
     //unsigned char *data = (unsigned char*)malloc( dst_w*dst_h ); 
     //scalex = (double)dst_w/(double)src_w; 
@@ -466,7 +548,7 @@ void resize_image_d( double *src_data, double *dst_data, const int &src_w, const
     double sr, sc, ratior, ratioc, value1, value2;  
     int dr, dc, isr, isc; 
     double *imgp; 
-    int dd, t, stepr, stepc, ii;
+    int dd, ii;
 	int b1, b2; 
  
     //unsigned char *data = (unsigned char*)malloc( dst_w*dst_h ); 
